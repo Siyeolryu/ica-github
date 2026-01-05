@@ -1,169 +1,211 @@
 import 'dotenv/config'
 import axios from 'axios'
 import * as cheerio from 'cheerio'
+import fs from 'fs'
+import crypto from 'crypto'
 import { createClient } from '@supabase/supabase-js'
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY // 서버 적재용
+  process.env.SUPABASE_SERVICE_ROLE_KEY
 )
 
-const UA =
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123 Safari/537.36'
+const REVIEW_LIMIT = 20
+
+function cleanText(s) {
+  if (!s) return null
+  const t = String(s).replace(/\s+/g, ' ').trim()
+  return t.length ? t : null
+}
+
+function hashReview(author, title, body) {
+  return crypto
+    .createHash('sha256')
+    .update((author || '') + '|' + (title || '') + '|' + (body || ''))
+    .digest('hex')
+}
+
+function looksLikeBlocked(html) {
+  const h = html.toLowerCase()
+  const signals = [
+    'captcha',
+    'verify',
+    'robot',
+    'unusual traffic',
+    'challenge',
+    'cloudflare',
+    '본인 인증',
+    '길게 누르기',
+    '로봇',
+    '인증이 필요',
+  ]
+  return signals.some((s) => h.includes(s))
+}
 
 async function fetchHtml(url) {
   const res = await axios.get(url, {
-    headers: {
-      'User-Agent': UA,
-      'Accept-Language': 'en-US,en;q=0.9,ko;q=0.8',
-    },
     timeout: 30000,
+    headers: {
+      // UA/언어만으로도 일부는 통과하지만, 지금처럼 인증 뜨면 대부분 실패합니다.
+      'User-Agent':
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0 Safari/537.36',
+      'Accept-Language': 'ko-KR,ko;q=0.9,en;q=0.8',
+      Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    },
+    maxRedirects: 5,
+    validateStatus: (s) => s >= 200 && s < 400,
   })
-  return res.data
+  return String(res.data)
 }
 
-// iHerb 페이지 구조가 바뀔 수 있어 "최대한 안전한" 파싱만 합니다.
-// (필요하면 네 프로젝트 데이터 포맷에 맞게 더 정교화 가능)
 function parseProductAndReviews(html, url) {
   const $ = cheerio.load(html)
 
-  // 제품 기본 정보 (가능한 것만)
-  const title =
-    $('h1').first().text().trim() ||
-    $('meta[property="og:title"]').attr('content')?.trim() ||
-    null
+  const title = cleanText($('h1').first().text())
+  const brand = cleanText($('a[href*="/brands/"]').first().text())
 
-  const brand =
-    $('[data-ga-label="brand"]').first().text().trim() ||
-    $('a[href*="/brands/"]').first().text().trim() ||
-    null
+  // ✅ 리뷰 셀렉터는 iHerb가 자주 바뀌어서 “후보”를 여러 개 둡니다.
+  // 단, axios로는 JS 렌더링된 리뷰가 없을 확률이 높아 0개가 정상일 수 있음.
+  const reviewCandidates = []
+  const selectors = [
+    '[data-testid*="review"]',
+    '[itemtype*="Review"]',
+    '[class*="review"]',
+  ]
 
-  const ratingAvgText =
-    $('[data-testid*="rating"]').first().text().trim() ||
-    $('[class*="rating"]').first().text().trim() ||
-    null
-
-  // 숫자만 대충 추출
-  const ratingAvg = ratingAvgText ? Number((ratingAvgText.match(/[\d.]+/) || [])[0]) : null
-
-  // 리뷰는 페이지에 따라 서버 렌더링이 아닐 수 있어요.
-  // 일단 "페이지 안에 있는 리뷰 블록"을 최대한 긁어옵니다.
-  const reviews = []
-
-  const reviewBlocks = $('[data-testid*="review"], [class*="review"]').slice(0, 25)
-  reviewBlocks.each((_, el) => {
-    const block = $(el)
-
-    const author =
-      block.find('[class*="author"], [data-testid*="author"]').first().text().trim() || null
-    const body =
-      block.find('[class*="content"], [class*="text"], [data-testid*="content"]').first().text().trim() ||
-      block.text().trim() ||
-      null
-    const ratingText =
-      block.find('[class*="star"], [data-testid*="rating"]').first().text().trim() || null
-    const rating = ratingText ? Number((ratingText.match(/\d+/) || [])[0]) : null
-
-    if (body && body.length > 20) {
-      // 리뷰 고유 ID가 명확치 않으니, (author+body 일부)로 간이 해시 키 만들기
-      const source_review_id = Buffer.from((author || '') + '|' + body.slice(0, 80))
-        .toString('base64')
-        .replace(/=+$/g, '')
-
-      reviews.push({
-        source_review_id,
-        author,
-        rating,
-        title: null,
-        body,
-        language: 'ko', // 대충 기본. 필요하면 감지 로직 추가
-        helpful_count: null,
-        review_date: null,
-      })
+  let nodes = null
+  for (const sel of selectors) {
+    const found = $(sel)
+    if (found.length >= 3) {
+      nodes = found
+      break
     }
-  })
+  }
+
+  if (nodes) {
+    nodes.each((_, el) => {
+      const card = $(el)
+
+      const author = cleanText(
+        card.find('[itemprop="author"], [class*="author"], strong, a').first().text()
+      )
+
+      const body = cleanText(
+        card
+          .find('[itemprop="reviewBody"], [class*="reviewBody"], [class*="content"], [class*="text"], p')
+          .first()
+          .text()
+      )
+
+      const title2 = cleanText(
+        card.find('[itemprop="name"], [class*="title"], h3, h4').first().text()
+      )
+
+      // 별점은 HTML에 없을 수 있음
+      const ratingLabel = card.find('[aria-label*="별"], [aria-label*="out of 5"]').first().attr('aria-label')
+      const rating = ratingLabel ? Number((ratingLabel.match(/\d+/) || [])[0]) : null
+
+      if (body && body.length >= 30) {
+        reviewCandidates.push({
+          source_review_id: hashReview(author, title2, body),
+          author: author || null,
+          rating: Number.isFinite(rating) ? rating : null,
+          title: title2 || null,
+          body,
+          language: 'ko',
+          helpful_count: null,
+          review_date: null,
+        })
+      }
+    })
+  }
+
+  // 중복 제거 + limit
+  const uniq = new Map()
+  for (const r of reviewCandidates) {
+    if (!uniq.has(r.source_review_id)) uniq.set(r.source_review_id, r)
+  }
 
   return {
     product: {
-      source: 'iherb',
-      source_product_id:
-        $('meta[property="og:url"]').attr('content')?.split('/').pop()?.split('?')[0] ||
-        url.split('/').pop()?.split('?')[0] ||
-        url,
       url,
       title,
       brand,
-      category: null,
-      price: null,
-      currency: 'USD',
-      rating_avg: Number.isFinite(ratingAvg) ? ratingAvg : null,
-      rating_count: null,
     },
-    reviews: reviews.slice(0, 20),
+    reviews: Array.from(uniq.values()).slice(0, REVIEW_LIMIT),
   }
 }
 
-async function upsertToSupabase(parsed) {
-  // 제품 업서트
-  const { data: pRow, error: pErr } = await supabase
+async function saveToSupabase(url, product, reviews) {
+  const source = 'iherb_axios'
+  const source_product_id = url.split('/').pop()?.split('?')[0] || url
+
+  const productPayload = {
+    source,
+    source_product_id,
+    url,
+    title: product.title || null,
+    brand: product.brand || null,
+    category: null,
+    price: null,
+    currency: 'KRW',
+    rating_avg: null,
+    rating_count: null,
+  }
+
+  const { data: productRow, error: productErr } = await supabase
     .from('products')
-    .upsert(parsed.product, { onConflict: 'source,source_product_id' })
+    .upsert(productPayload, { onConflict: 'source,source_product_id' })
     .select('id')
     .single()
+  if (productErr) throw productErr
 
-  if (pErr) throw pErr
-  const productId = pRow.id
+  const productId = productRow.id
 
-  // 리뷰 upsert (product_id 주입)
- // source_review_id 기준으로 중복 제거
-const uniqMap = new Map()
-
-parsed.reviews.forEach((r) => {
-  if (!uniqMap.has(r.source_review_id)) {
-    uniqMap.set(r.source_review_id, r)
-  }
-})
-
-const payload = Array.from(uniqMap.values()).map((r) => ({
-  product_id: productId,
-  source: 'iherb',
-  ...r,
-}))
-
-
+  const payload = reviews.map((r) => ({ product_id: productId, source, ...r }))
   if (payload.length) {
-    const { error: rErr } = await supabase
+    const { error: reviewErr } = await supabase
       .from('reviews')
       .upsert(payload, { onConflict: 'source,source_review_id' })
-    if (rErr) throw rErr
+    if (reviewErr) throw reviewErr
   }
 
-  return { productId, reviewCount: payload.length }
+  console.log('✅ Saved:', { productId, reviewCount: payload.length })
 }
 
-async function main() {
-  const url = process.argv[2]
-  if (!url) {
-    console.error('Usage: node scrape-iherb-to-supabase.mjs "<iherb product url>"')
-    process.exit(1)
-  }
+async function run(url) {
+  if (!url?.startsWith('https://')) throw new Error('URL은 https://로 시작해야 합니다.')
 
   console.log('Fetching:', url)
   const html = await fetchHtml(url)
 
-  const parsed = parseProductAndReviews(html, url)
-  console.log('Parsed product:', {
-    title: parsed.product.title,
-    brand: parsed.product.brand,
-    rating_avg: parsed.product.rating_avg,
-    reviews: parsed.reviews.length,
-  })
+  // 디버그 저장
+  if (process.env.DEBUG === '1') {
+    fs.writeFileSync('debug_axios.html', html, 'utf-8')
+    console.log('🧪 Saved debug_axios.html')
+  }
 
-  const result = await upsertToSupabase(parsed)
-  console.log('✅ Saved to Supabase:', result)
+  // 차단 판별
+  if (looksLikeBlocked(html)) {
+    console.log('⛔ 차단/인증 페이지로 보입니다. (axios+cheerio로는 리뷰 수집이 어렵습니다)')
+    console.log('   → A안(수동 입력) 또는 다른 소스(쿠팡/네이버/아마존) 전환을 추천합니다.')
+    return
+  }
+
+  const { product, reviews } = parseProductAndReviews(html, url)
+
+  console.log('Parsed product:', product)
+  console.log('Parsed reviews:', reviews.length)
+
+  await saveToSupabase(url, product, reviews)
+
+  if (reviews.length === 0) {
+    console.log('⚠️ 리뷰가 0개입니다. (JS 렌더링 리뷰라 HTML에 없을 가능성이 큽니다)')
+  }
 }
 
-main().catch((e) => {
+const url = process.argv[2]
+run(url).catch((e) => {
   console.error('❌ Error:', e?.message || e)
   process.exit(1)
 })
