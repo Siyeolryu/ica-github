@@ -111,3 +111,5 @@ if __name__ == "__main__":
     else:
         print("❌ Supabase 연결 실패!")
 
+
+
