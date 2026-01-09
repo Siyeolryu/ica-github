@@ -5,12 +5,25 @@
 
 import streamlit as st
 import pandas as pd
-from mock_data import (
-    get_all_products,
-    get_all_analysis_results,
-    search_products,
-    get_analysis_result
-)
+import os
+
+# Supabase 데이터 사용 여부 (환경 변수 또는 기본값)
+USE_SUPABASE = os.getenv('USE_SUPABASE', 'true').lower() == 'true'
+
+if USE_SUPABASE:
+    from supabase_data import (
+        get_all_products,
+        get_all_analysis_results,
+        search_products,
+        get_analysis_result
+    )
+else:
+    from mock_data import (
+        get_all_products,
+        get_all_analysis_results,
+        search_products,
+        get_analysis_result
+    )
 from visualizations import (
     render_gauge_chart,
     render_trust_badge,
