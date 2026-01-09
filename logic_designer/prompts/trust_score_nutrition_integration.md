@@ -353,3 +353,43 @@ from database.supabase_client import get_supabase_client
 - 식품의약품안전처 건강기능식품 정보
 - 건강기능식품 공전: 성분명 표준화 규정
 - GitHub 저장소: https://github.com/tturupapa-stack/dev2/
+
+---
+
+## 구현 완료 요약 (2026-01-08)
+
+### ✅ 구현된 기능
+
+1. **`calculate_nutrition_consistency_score()` 메서드 구현**
+   - 리뷰에서 언급된 성분이 실제 제품에 포함되어 있는지 평가
+   - `nutrition_utils.py`의 함수들을 활용하여 구현
+   - 오류 발생 시 50.0 반환 (중간값)
+
+2. **`calculate_base_score()` 메서드 확장**
+   - `nutrition_score` 선택적 매개변수 추가
+   - 영양성분 점수가 있으면 확장 공식 사용 (가중치 조정)
+   - 없으면 기존 공식 사용 (하위 호환성)
+
+3. **`calculate_final_score()` 메서드 확장**
+   - `review_text`, `product_id`, `use_nutrition_score` 매개변수 추가
+   - 영양성분 일치도 점수 계산 및 통합
+   - 반환값에 `nutrition_score` 필드 추가
+
+### 📝 구현 세부사항
+
+- **점수 계산 공식**: 
+  - 영양성분 점수 있을 때: `S = (L × 0.15) + (R × 0.15) + (M × 0.25) + (P × 0.1) + (C × 0.15) + (N × 0.2)`
+  - 영양성분 점수 없을 때: 기존 공식 유지
+- **공통 유틸리티 활용**: `nutrition_utils.py`의 함수들을 import하여 사용
+- **안전한 예외 처리**: 모든 단계에 try-except 추가, 오류 시 기본값 반환
+
+### 🔄 변경된 파일
+
+- `logic_designer/trust_score.py`: 2개 메서드 추가/수정, 점수 공식 확장
+- `logic_designer/nutrition_utils.py`: 공통 유틸리티 함수 모듈 (신규 생성)
+
+### ⚠️ 주의사항
+
+- 영양성분 점수는 선택적 적용 (기본값 50.0)
+- `use_nutrition_score=False`로 설정하면 기존 방식으로 동작
+- `product_id`가 None이면 영양성분 점수 계산 생략

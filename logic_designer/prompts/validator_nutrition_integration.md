@@ -385,3 +385,51 @@ from database.supabase_client import get_supabase_client
 - 식품의약품안전처 건강기능식품 정보
 - 건강기능식품 공전: 금지된 표시·광고 문구
 - GitHub 저장소: https://github.com/tturupapa-stack/dev2/
+
+---
+
+## 구현 완료 요약 (2026-01-08)
+
+### ✅ 구현된 기능
+
+1. **`check_ad_patterns()` 메서드 확장**
+   - `product_id` 매개변수 추가 완료
+   - 입력 검증 추가 (리뷰 3자 미만 시 빈 결과 반환)
+   - 영양성분 DB 기반 추가 검증 로직 통합
+
+2. **`_validate_ingredient_claims()` 메서드 구현**
+   - 리뷰에서 언급된 성분이 실제 제품에 포함되어 있는지 검증
+   - `nutrition_utils.py`의 함수들을 활용
+   - 허위 성분 주장 감지
+
+3. **`_validate_efficacy_claims()` 메서드 구현**
+   - 리뷰의 효능 주장이 공식 효능 범위 내인지 검증
+   - 과장된 효능 주장 패턴 감지
+   - 허위 효능 주장 감지
+
+4. **`_validate_nutrition_claims()` 메서드 구현**
+   - 종합 영양성분 검증 결과 반환
+   - 언급된 성분, 유효한 성분, 허위 주장 목록 제공
+   - 안전한 예외 처리 포함
+
+5. **`validate_review()` 메서드 확장**
+   - `product_id` 매개변수 추가
+   - 영양성분 검증 결과를 검증 결과에 포함
+   - `nutrition_validation` 필드 추가
+
+### 📝 구현 세부사항
+
+- **공통 유틸리티 활용**: `nutrition_utils.py`의 함수들을 import하여 사용
+- **안전한 예외 처리**: 모든 DB 조회 및 검증 함수에 try-except 추가
+- **하위 호환성 유지**: `product_id`가 None이면 기존 방식으로 동작
+
+### 🔄 변경된 파일
+
+- `logic_designer/validator.py`: 4개 검증 메서드 추가, `validate_review()` 확장
+- `logic_designer/nutrition_utils.py`: 공통 유틸리티 함수 모듈 (신규 생성)
+
+### ⚠️ 주의사항
+
+- 영양성분 검증 결과는 `nutrition_validation` 필드에 포함
+- 허위 주장이 있으면 14번 항목으로 추가 감점
+- 효능 주장 검증은 향후 더 정교한 로직으로 개선 가능

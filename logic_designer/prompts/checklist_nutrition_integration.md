@@ -280,3 +280,45 @@ def match_ingredient_name(mentioned_name: str, official_name: str, aliases: List
 - 식품의약품안전처 건강기능식품 정보: https://www.foodsafetykorea.go.kr/
 - 건강기능식품 공전: 성분별 공식 효능 및 표시 문구
 - GitHub 저장소: https://github.com/tturupapa-stack/dev2/
+
+---
+
+## 구현 완료 요약 (2026-01-08)
+
+### ✅ 구현된 기능
+
+1. **`check_ad_patterns()` 메서드 확장**
+   - `product_id` 매개변수 추가 완료
+   - 입력 검증 추가 (리뷰 3자 미만 시 빈 결과 반환)
+   - 영양성분 DB 기반 추가 검증 로직 통합
+
+2. **`_validate_ingredient_claims()` 메서드 구현**
+   - 리뷰에서 언급된 성분이 실제 제품에 포함되어 있는지 검증
+   - `nutrition_utils.py`의 `get_nutrition_info_safe()`, `extract_ingredients()`, `is_valid_ingredient()` 함수 활용
+   - 허위 성분 주장 감지 시 5번 항목 강화
+
+3. **`_validate_medical_claims()` 메서드 구현**
+   - 리뷰의 의학적 주장이 공식 효능 범위 내인지 검증
+   - 과장된 효능 주장 패턴 감지 (100% 회복, 완벽 치료 등)
+   - 허위 의학적 주장 감지 시 9번 항목 강화
+
+4. **`_validate_effect_timeline()` 메서드 구현**
+   - 효과 발현 시점의 현실성 검증
+   - `nutrition_utils.py`의 `get_typical_effect_period()` 함수 활용
+   - 비현실적인 시점 주장 감지 시 10번 항목 강화
+
+### 📝 구현 세부사항
+
+- **공통 유틸리티 활용**: 모든 영양성분 관련 함수는 `logic_designer/nutrition_utils.py`에서 import하여 사용
+- **안전한 예외 처리**: 모든 DB 조회 및 검증 함수에 try-except 추가, 오류 발생 시 기존 결과만 반환
+- **하위 호환성 유지**: `product_id`가 None이면 기존 방식으로 동작, 오류 없이 처리
+
+### 🔄 변경된 파일
+
+- `logic_designer/checklist.py`: 3개 검증 메서드 추가, `check_ad_patterns()` 확장
+- `logic_designer/nutrition_utils.py`: 공통 유틸리티 함수 모듈 (신규 생성)
+
+### ⚠️ 주의사항
+
+- 실제 DB 스키마는 `nutrition_info` 테이블의 `food_name`, `representative_food_name` 필드를 사용
+- 성분명 매칭은 정규화된 문자열 비교로 수행 (향후 동의어 사전 확장 가능)
