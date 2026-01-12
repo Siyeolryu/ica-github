@@ -1,187 +1,280 @@
-# Development Log: Repository File Cleanup
+# 개발일지: ica-github 저장소 파일 정리
 
-**Date**: 2026-01-12  
-**Author**: Development Team  
-**Work Type**: Repository cleanup and structure improvement
-
----
-
-## 📋 Overview
-
-Cleaned up duplicate files in the `ica-github` repository root directory and improved project structure to enhance maintainability.
+**작성일**: 2026-01-12  
+**작성자**: 개발팀  
+**작업 유형**: 저장소 정리 및 구조 개선
 
 ---
 
-## 🔍 Problems Found
+## 📋 개요
 
-### 1. Duplicate Files in Root Directory
-
-Root directory had duplicate files with `dev2-2Hour/dev2-main/ui_integration/` folder:
-
-| Filename | Root Location | Actual Location | Status |
-|----------|--------------|-----------------|--------|
-| `app.py` | ✅ Exists | `dev2-main/ui_integration/app.py` | Duplicate |
-| `mock_data.py` | ✅ Exists | `dev2-main/ui_integration/mock_data.py` | Duplicate |
-| `supabase_data.py` | ✅ Exists | `dev2-main/ui_integration/supabase_data.py` | Duplicate |
-| `visualizations.py` | ✅ Exists | `dev2-main/ui_integration/visualizations.py` | Duplicate |
-| `requirements.txt` | ✅ Exists | `dev2-main/requirements.txt` | Duplicate |
-
-**Analysis Result**:
-- Root files created around 9 PM on 2026-01-09
-- Files in `dev2-main/ui_integration/` also created at same time
-- File contents identical or very similar
-- Actual project is in `dev2-main/` folder
-
-**Decision**: Delete duplicate files in root (actual project is in `dev2-main/`)
-
-### 2. Document File Location
-
-- `SUPABASE_ERROR_REPORT.md` in root
-- Project documents in `dev2-main/docs/` folder
-
-**Decision**: Move `SUPABASE_ERROR_REPORT.md` to `dev2-main/docs/`
-
-### 3. README.md Insufficient
-
-- Root `README.md` almost empty
-- Insufficient project description
-
-**Decision**: Update `README.md` with project overview and usage
+`ica-github` 저장소의 루트 디렉토리에 중복된 파일들을 정리하고, 프로젝트 구조를 명확히 하여 유지보수성을 향상시켰습니다.
 
 ---
 
-## ✅ Work Performed
+## 🔍 발견된 문제점
 
-### Phase 1: Duplicate File Deletion
+### 1. 루트 디렉토리의 중복 파일
 
-Deleted 5 duplicate files from root directory:
+루트 디렉토리에 `dev2-2Hour/dev2-main/ui_integration/` 폴더와 중복된 파일들이 있었습니다:
 
-1. ✅ `app.py` deleted
-2. ✅ `mock_data.py` deleted
-3. ✅ `supabase_data.py` deleted
-4. ✅ `visualizations.py` deleted
-5. ✅ `requirements.txt` deleted
+| 파일명 | 루트 위치 | 실제 위치 | 상태 |
+|--------|----------|----------|------|
+| `app.py` | ✅ 있음 | `dev2-main/ui_integration/app.py` | 중복 |
+| `mock_data.py` | ✅ 있음 | `dev2-main/ui_integration/mock_data.py` | 중복 |
+| `supabase_data.py` | ✅ 있음 | `dev2-main/ui_integration/supabase_data.py` | 중복 |
+| `visualizations.py` | ✅ 있음 | `dev2-main/ui_integration/visualizations.py` | 중복 |
+| `requirements.txt` | ✅ 있음 | `dev2-main/requirements.txt` | 중복 |
 
-**Reason**: Actual project files are in `dev2-main/` folder, root files are duplicates
+**분석 결과**:
+- 루트의 파일들은 2026-01-09 오후 9시대에 생성됨
+- `dev2-main/ui_integration/`의 파일들도 동일한 시간대에 생성됨
+- 파일 내용이 동일하거나 매우 유사함
+- 실제 프로젝트는 `dev2-main/` 폴더에 있음
 
-### Phase 2: Document File Movement
+**결정**: 루트의 중복 파일 삭제 (실제 프로젝트는 `dev2-main/`에 있음)
 
-1. ✅ Moved `SUPABASE_ERROR_REPORT.md` to `dev2-main/docs/`
-   - Deleted from root
-   - Created at `dev2-main/docs/SUPABASE_ERROR_REPORT.md`
+### 2. 문서 파일 위치
 
-### Phase 3: README.md Update
+- `SUPABASE_ERROR_REPORT.md`가 루트에 있음
+- 프로젝트 문서는 `dev2-main/docs/` 폴더에 있음
 
-Updated root `README.md` with project overview and usage:
+**결정**: `SUPABASE_ERROR_REPORT.md`를 `dev2-main/docs/`로 이동
 
-- Project introduction
-- Project structure explanation
-- Quick start guide
-- Main features introduction
-- Technology stack
-- Related document links
+### 3. README.md 미비
 
----
+- 루트의 `README.md`가 거의 비어있음
+- 프로젝트 설명이 부족함
 
-## 📊 Cleanup Results Summary
+**결정**: `README.md`를 프로젝트 개요와 사용법으로 업데이트
 
-### Deleted Files (5)
+### 4. .gitignore 미비
 
-| Filename | Location | Deletion Reason |
-|----------|----------|-----------------|
-| `app.py` | Root | Duplicate (dev2-main/ui_integration/app.py exists) |
-| `mock_data.py` | Root | Duplicate (dev2-main/ui_integration/mock_data.py exists) |
-| `supabase_data.py` | Root | Duplicate (dev2-main/ui_integration/supabase_data.py exists) |
-| `visualizations.py` | Root | Duplicate (dev2-main/ui_integration/visualizations.py exists) |
-| `requirements.txt` | Root | Duplicate (dev2-main/requirements.txt exists) |
+- `.gitignore`가 매우 간단함 (5줄만)
+- Python 프로젝트에 필요한 패턴들이 누락됨
 
-### Moved Files (1)
-
-| Filename | Previous Location | New Location | Reason |
-|----------|-------------------|--------------|--------|
-| `SUPABASE_ERROR_REPORT.md` | Root | `dev2-main/docs/` | Documents belong in docs folder |
-
-### Created/Modified Files (2)
-
-| Filename | Location | Purpose |
-|----------|----------|---------|
-| `README.md` | Root | Added project overview and usage |
-| `.gitignore` | Root | Added comprehensive patterns |
+**결정**: 포괄적인 `.gitignore`로 업데이트
 
 ---
 
-## 📁 Improved Folder Structure
+## ✅ 수행된 작업
 
-### Before (Before Cleanup)
+### Phase 1: 중복 파일 삭제
+
+루트 디렉토리의 중복 파일 5개를 삭제했습니다:
+
+1. ✅ `app.py` 삭제
+2. ✅ `mock_data.py` 삭제
+3. ✅ `supabase_data.py` 삭제
+4. ✅ `visualizations.py` 삭제
+5. ✅ `requirements.txt` 삭제
+
+**이유**: 실제 프로젝트 파일은 `dev2-main/` 폴더에 있으며, 루트의 파일들은 중복이므로 삭제
+
+### Phase 2: 문서 파일 이동
+
+1. ✅ `SUPABASE_ERROR_REPORT.md`를 `dev2-main/docs/`로 이동
+   - 루트에서 삭제
+   - `dev2-main/docs/SUPABASE_ERROR_REPORT.md`로 생성
+
+### Phase 3: README.md 업데이트
+
+루트의 `README.md`를 프로젝트 개요와 사용법으로 업데이트:
+
+- 프로젝트 소개
+- 프로젝트 구조 설명
+- 빠른 시작 가이드
+- 주요 기능 소개
+- 기술 스택
+- 관련 문서 링크
+
+### Phase 4: .gitignore 업데이트
+
+포괄적인 `.gitignore`로 업데이트:
+
+- Python 관련 패턴
+- Virtual Environment
+- IDE 설정 파일
+- 환경 변수 파일
+- OS 관련 파일
+- 로그 파일
+- Node.js 관련
+- 데이터 파일
+- Streamlit secrets
+- 임시 파일
+
+---
+
+## 📊 정리 결과 요약
+
+### 삭제된 파일 (5개)
+
+| 파일명 | 위치 | 삭제 이유 |
+|--------|------|----------|
+| `app.py` | 루트 | 중복 (dev2-main/ui_integration/app.py 존재) |
+| `mock_data.py` | 루트 | 중복 (dev2-main/ui_integration/mock_data.py 존재) |
+| `supabase_data.py` | 루트 | 중복 (dev2-main/ui_integration/supabase_data.py 존재) |
+| `visualizations.py` | 루트 | 중복 (dev2-main/ui_integration/visualizations.py 존재) |
+| `requirements.txt` | 루트 | 중복 (dev2-main/requirements.txt 존재) |
+
+### 이동된 파일 (1개)
+
+| 파일명 | 이전 위치 | 새 위치 | 이유 |
+|--------|----------|---------|------|
+| `SUPABASE_ERROR_REPORT.md` | 루트 | `dev2-main/docs/` | 문서는 docs 폴더에 위치 |
+
+### 생성/수정된 파일 (2개)
+
+| 파일명 | 위치 | 목적 |
+|--------|------|------|
+| `README.md` | 루트 | 프로젝트 개요 및 사용법 추가 |
+| `.gitignore` | 루트 | 포괄적인 패턴 추가 |
+
+---
+
+## 📁 개선된 폴더 구조
+
+### Before (정리 전)
 ```
 ica-github/
-├── app.py                    ❌ Duplicate
-├── mock_data.py              ❌ Duplicate
-├── supabase_data.py          ❌ Duplicate
-├── visualizations.py         ❌ Duplicate
-├── requirements.txt          ❌ Duplicate
-├── SUPABASE_ERROR_REPORT.md  ❌ Wrong location
-├── README.md                 ⚠️ Almost empty
-├── .gitignore                ⚠️ Too simple
+├── app.py                    ❌ 중복
+├── mock_data.py              ❌ 중복
+├── supabase_data.py          ❌ 중복
+├── visualizations.py         ❌ 중복
+├── requirements.txt          ❌ 중복
+├── SUPABASE_ERROR_REPORT.md  ❌ 잘못된 위치
+├── README.md                 ⚠️ 거의 비어있음
+├── .gitignore                ⚠️ 너무 간단함
 └── dev2-2Hour/
-    └── dev2-main/            ✅ Actual project
+    └── dev2-main/            ✅ 실제 프로젝트
 ```
 
-### After (After Cleanup)
+### After (정리 후)
 ```
 ica-github/
-├── README.md                 ✅ Project overview and usage
-├── .gitignore                ✅ Comprehensive patterns
+├── README.md                 ✅ 프로젝트 개요 및 사용법
+├── .gitignore                ✅ 포괄적인 패턴
 └── dev2-2Hour/
-    └── dev2-main/            ✅ Actual project
+    └── dev2-main/            ✅ 실제 프로젝트
         ├── docs/
-        │   └── SUPABASE_ERROR_REPORT.md  ✅ Moved
+        │   └── SUPABASE_ERROR_REPORT.md  ✅ 이동됨
         ├── ui_integration/
-        │   ├── app.py        ✅ Maintained
-        │   ├── mock_data.py  ✅ Maintained
+        │   ├── app.py        ✅ 유지
+        │   ├── mock_data.py  ✅ 유지
         │   └── ...
         └── ...
 ```
 
 ---
 
-## 🎯 Improvement Effects
+## 🎯 개선 효과
 
-### 1. Repository Structure Clarification
-- Root directory is cleaner
-- Actual project clearly located in `dev2-main/` folder
-- Removed confusion by eliminating duplicate files
+### 1. 저장소 구조 명확화
+- 루트 디렉토리가 깔끔해짐
+- 실제 프로젝트는 `dev2-main/` 폴더에 명확히 위치
+- 중복 파일 제거로 혼란 방지
 
-### 2. Documentation Improvement
-- Added project overview and usage to `README.md`
-- Document files organized in appropriate location (`docs/`)
+### 2. 문서화 개선
+- `README.md`에 프로젝트 개요 및 사용법 추가
+- 문서 파일이 적절한 위치(`docs/`)에 정리
 
-### 3. Maintainability Enhancement
-- Updated `.gitignore` to prevent unnecessary file commits
-- Clear folder structure makes files easier to find
-
----
-
-## ✅ Completion Checklist
-
-- [x] Repository structure analysis and duplicate file identification
-- [x] Deleted 5 duplicate files from root
-- [x] Moved SUPABASE_ERROR_REPORT.md to docs folder
-- [x] Updated README.md (project overview and usage)
-- [x] Updated .gitignore (comprehensive patterns)
-- [x] Development log report written
-- [ ] Commit and push changes
+### 3. 유지보수성 향상
+- `.gitignore` 업데이트로 불필요한 파일 커밋 방지
+- 명확한 폴더 구조로 파일 찾기 용이
 
 ---
 
-## 📌 Conclusion
+## ⚠️ 주의사항
 
-Completed file cleanup work for `ica-github` repository. Deleted **5 duplicate files** and moved **1 document file to appropriate location** to improve repository structure.
+### 유지된 파일들
 
-**Main Achievements**:
-- Repository structure clarification
-- Duplicate file removal
-- Documentation improvement
-- Maintainability enhancement
+다음 파일들은 이름이 같지만 용도가 다르므로 **의도적으로 유지**했습니다:
 
-**Next Step**: Commit changes and push to GitHub to reflect cleaned structure.
+1. **`README.md`**
+   - 루트: 프로젝트 전체 개요
+   - `dev2-main/`: 프로젝트 상세 설명
+   - **이유**: 각각 다른 목적의 문서
+
+2. **`.gitignore`**
+   - 루트: 저장소 전체 ignore 규칙
+   - **이유**: 저장소 루트에 위치하는 것이 표준
+
+---
+
+## 📝 변경된 파일 목록
+
+### 삭제된 파일
+1. `app.py` (루트)
+2. `mock_data.py` (루트)
+3. `supabase_data.py` (루트)
+4. `visualizations.py` (루트)
+5. `requirements.txt` (루트)
+6. `SUPABASE_ERROR_REPORT.md` (루트, 이동됨)
+
+### 이동된 파일
+1. `SUPABASE_ERROR_REPORT.md` → `dev2-main/docs/SUPABASE_ERROR_REPORT.md`
+
+### 생성/수정된 파일
+1. `README.md` (루트, 업데이트)
+2. `.gitignore` (루트, 업데이트)
+
+---
+
+## 🔄 되돌리기 방법
+
+필요시 다음 명령으로 삭제된 파일을 복구할 수 있습니다:
+
+```bash
+# 특정 파일 복구
+git checkout HEAD -- <파일명>
+
+# 특정 커밋으로 되돌리기
+git revert <commit-hash>
+
+# 삭제된 파일 목록 확인
+git log --diff-filter=D --summary
+```
+
+---
+
+## 📚 참고 사항
+
+### 파일 정리 원칙
+
+1. **중복 파일**: 실제 프로젝트 위치의 파일 유지, 루트의 중복 삭제
+2. **문서 파일**: 적절한 위치(`docs/`)로 이동
+3. **README**: 프로젝트 루트에 개요 및 사용법 포함
+4. **.gitignore**: 포괄적인 패턴으로 업데이트
+
+### 향후 권장 사항
+
+1. **파일 생성 시**: 적절한 폴더에 생성 (루트에 중복 생성 금지)
+2. **문서 파일**: `docs/` 폴더에 위치
+3. **README**: 프로젝트 루트에 필수 정보 포함
+4. **.gitignore**: 정기적으로 업데이트
+
+---
+
+## ✅ 완료 체크리스트
+
+- [x] 저장소 구조 파악 및 중복 파일 확인
+- [x] 루트의 중복 파일 5개 삭제
+- [x] SUPABASE_ERROR_REPORT.md를 docs 폴더로 이동
+- [x] README.md 업데이트 (프로젝트 개요 및 사용법)
+- [x] .gitignore 업데이트 (포괄적인 패턴)
+- [x] 개발일지 보고서 작성
+- [ ] 변경사항 커밋 및 push
+
+---
+
+## 📌 결론
+
+`ica-github` 저장소의 파일 정리 작업을 완료했습니다. 총 **5개의 중복 파일을 삭제**하고, **1개의 문서 파일을 적절한 위치로 이동**하여 저장소 구조를 개선했습니다.
+
+**주요 성과**:
+- 저장소 구조 명확화
+- 중복 파일 제거
+- 문서화 개선
+- 유지보수성 향상
+
+**다음 단계**: 변경사항을 커밋하고 GitHub에 push하여 정리된 구조를 반영하겠습니다.

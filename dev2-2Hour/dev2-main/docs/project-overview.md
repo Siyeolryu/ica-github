@@ -18,15 +18,15 @@
 ### 팀원 A: 데이터 수집 및 DB 구축 담당 (Data Manager)
 - **목표:** 루테인 제품 5종의 리뷰 데이터를 수집하여 Supabase에 저장
 - **주요 작업:** iHerb에서 리뷰 크롤링/수집 → 데이터 정제 → Supabase 테이블 설계 및 저장
-- **상세 가이드:** [팀원A_데이터수집_정제_가이드.md](team-member-a-data-collection-guide.md)
+- **상세 가이드:** [Team Member A Data Collection Guide](team-member-a-data-collection-guide.md)
 
 ### 팀원 B: 로직 설계 및 AI 분석 담당 (Logic Designer)
 - **목표:** 리뷰의 진위여부를 가리고, 약사의 시각으로 요약
-- **상세 가이드:** [팀원B_로직설계_AI분석_가이드.md](team-member-b-logic-design-ai-analysis-guide.md)
+- **상세 가이드:** [Team Member B Logic Design & AI Analysis Guide](team-member-b-logic-design-ai-analysis-guide.md)
 
 ### 팀원 C: 화면 구현 및 통합 담당 (UI & Integration)
 - **목표:** 결과물을 멋진 웹 대시보드로 보여주기
-- **상세 가이드:** [팀원C_화면구현_통합_가이드.md](team-member-c-ui-integration-guide.md)
+- **상세 가이드:** [Team Member C UI Integration Guide](team-member-c-ui-integration-guide.md)
 
 ---
 
@@ -92,11 +92,11 @@ flowchart TB
 ```
 개발2팀 과제/
 ├── docs/                          # 문서 디렉토리
-│   ├── 프로젝트_전체_개요.md
-│   ├── 팀원A_데이터수집_정제_가이드.md
-│   ├── 팀원B_로직설계_AI분석_가이드.md
-│   ├── 팀원C_화면구현_통합_가이드.md
-│   └── 사용자_시나리오.md
+│   ├── project-overview.md
+│   ├── team-member-a-data-collection-guide.md
+│   ├── team-member-b-logic-design-ai-analysis-guide.md
+│   ├── team-member-c-ui-integration-guide.md
+│   └── user-scenario.md
 ├── data_manager/                  # 팀원 A 작업
 │   ├── __init__.py
 │   ├── scraper.py                 # iHerb 크롤러 (1회성 데이터 수집용)
@@ -483,9 +483,9 @@ python-dotenv>=1.0.0
 
 ## 📚 참고 문서
 
-- [팀원 A 가이드](team-member-a-data-collection-guide.md)
-- [팀원 B 가이드](team-member-b-logic-design-ai-analysis-guide.md)
-- [팀원 C 가이드](team-member-c-ui-integration-guide.md)
+- [Team Member A Guide](team-member-a-data-collection-guide.md)
+- [Team Member B Guide](team-member-b-logic-design-ai-analysis-guide.md)
+- [Team Member C Guide](team-member-c-ui-integration-guide.md)
 
 ---
 
