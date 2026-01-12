@@ -3,11 +3,16 @@ Supabase 데이터 추출 스크립트 (REST API 사용)
 products와 reviews 테이블 데이터를 CSV/JSON으로 내보내기
 """
 import os
+import sys
 import json
 import csv
 import requests
 from datetime import datetime
 from dotenv import load_dotenv
+
+# 프로젝트 루트를 경로에 추가
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, project_root)
 
 # 환경 변수 로드
 load_dotenv()
@@ -19,7 +24,7 @@ SUPABASE_KEY = os.getenv("SUPABASE_ANON_KEY") or os.getenv("SUPABASE_KEY")
 print(f"Connecting to Supabase: {SUPABASE_URL}")
 
 # 출력 디렉토리
-OUTPUT_DIR = "ica-github/dev2-2Hour/dev2-main/data"
+OUTPUT_DIR = os.path.join(project_root, "data")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 def fetch_table(table_name):

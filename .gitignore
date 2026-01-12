@@ -63,6 +63,20 @@ test_results*.json
 *.bak
 *.cache
 
+# Commit fix scripts (임시 파일)
+fix_*.ps1
+fix_*.sh
+fix_*.txt
+commit_msg_fix.txt
+.gitmessage
+
+# Test temporary files (루트에 있는 임시 테스트 파일)
+test-*.mjs
+test_*.py
+!tests/test_*.py
+!logic_designer/test_*.py
+!database/test_*.py
+
 ui_integration/__pycache__/
 
 # Node.js
