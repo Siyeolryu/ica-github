@@ -136,39 +136,39 @@ def main():
 
         # 사이드바 - 검색 및 필터
         with st.sidebar:
-        st.markdown("### 🔎 제품 검색")
+            st.markdown("### 🔎 제품 검색")
 
-        search_query_raw = st.text_input(
-            "제품명 또는 브랜드 검색",
-            placeholder="예: NOW Foods, Lutein...",
-            key="search"
-        )
-        
-        # 사용자 입력 검증 및 이스케이프
-        search_query = sanitize_user_input(search_query_raw) if search_query_raw else ""
+            search_query_raw = st.text_input(
+                "제품명 또는 브랜드 검색",
+                placeholder="예: NOW Foods, Lutein...",
+                key="search"
+            )
+            
+            # 사용자 입력 검증 및 이스케이프
+            search_query = sanitize_user_input(search_query_raw) if search_query_raw else ""
 
-        st.markdown("---")
+            st.markdown("---")
 
-        st.markdown("### ℹ️ 신뢰도 등급 안내")
-        st.markdown("""
-        - **HIGH (70점 이상)**: 신뢰할 수 있는 제품
-        - **MEDIUM (50-70점)**: 보통 수준
-        - **LOW (50점 미만)**: 주의 필요
-        """)
+            st.markdown("### ℹ️ 신뢰도 등급 안내")
+            st.markdown("""
+            - **HIGH (70점 이상)**: 신뢰할 수 있는 제품
+            - **MEDIUM (50-70점)**: 보통 수준
+            - **LOW (50점 미만)**: 주의 필요
+            """)
 
-        st.markdown("---")
+            st.markdown("---")
 
-        st.markdown("### 📊 분석 기준")
-        st.markdown("""
-        1. 인증 구매 비율
-        2. 재구매율
-        3. 장기 사용 비율
-        4. 평점 분포 적절성
-        5. 리뷰 길이
-        6. 시간 분포 자연성
-        7. 광고성 리뷰 탐지
-        8. 리뷰어 다양성
-        """)
+            st.markdown("### 📊 분석 기준")
+            st.markdown("""
+            1. 인증 구매 비율
+            2. 재구매율
+            3. 장기 사용 비율
+            4. 평점 분포 적절성
+            5. 리뷰 길이
+            6. 시간 분포 자연성
+            7. 광고성 리뷰 탐지
+            8. 리뷰어 다양성
+            """)
 
         # 데이터 로드 (캐싱 적용)
         all_analysis = load_analysis_data()
@@ -178,20 +178,20 @@ def main():
             return
 
         # 검색 처리
-    try:
-        if search_query:
-            filtered_products = search_products(search_query)
-            products_data = []
-            
-            for p in filtered_products:
-                product_id = p.get("id")
-                if product_id and product_id in all_analysis:
-                    products_data.append(all_analysis[product_id])
+        try:
+            if search_query:
+                filtered_products = search_products(search_query)
+                products_data = []
+                
+                for p in filtered_products:
+                    product_id = p.get("id")
+                    if product_id and product_id in all_analysis:
+                        products_data.append(all_analysis[product_id])
 
-            if not products_data:
-                st.warning(f"'{search_query}'에 대한 검색 결과가 없습니다.")
-                return
-        else:
+                if not products_data:
+                    st.warning(f"'{search_query}'에 대한 검색 결과가 없습니다.")
+                    return
+            else:
                 products_data = list(all_analysis.values())
         except Exception as e:
             st.error(f"검색 처리 중 오류 발생: {str(e)}")
@@ -225,16 +225,16 @@ def main():
 
         cols = st.columns(3)
 
-    for idx, data in enumerate(top3_products):
-        try:
-            product = data.get("product", {})
-            ai_result = data.get("ai_result", {})
-            
-            # 데이터 검증
-            if not product or not ai_result:
-                continue
-            
-            with cols[idx]:
+        for idx, data in enumerate(top3_products):
+            try:
+                product = data.get("product", {})
+                ai_result = data.get("ai_result", {})
+                
+                # 데이터 검증
+                if not product or not ai_result:
+                    continue
+                
+                with cols[idx]:
                 # 순위 배지 표시 (안전한 방식)
                 rank_badge = rank_badges.get(idx, "")
                 st.markdown(
