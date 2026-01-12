@@ -159,9 +159,55 @@ def render_comparison_table(products_data):
     return df
 
 
+def _parse_mg_value(value_str):
+    """
+    mg 값 문자열을 숫자로 변환
+
+    Args:
+        value_str: "20mg" 또는 "4.5mg" 형태의 문자열
+
+    Returns:
+        float: mg 값 (파싱 실패 시 0)
+    """
+    if not value_str:
+        return 0
+    try:
+        # "20mg" -> 20, "4.5mg" -> 4.5
+        return float(value_str.replace('mg', '').strip())
+    except (ValueError, AttributeError):
+        return 0
+
+
+def _calculate_total_content(ingredients):
+    """
+    총 함유량 계산 (루테인 + 제아잔틴 + 메소제아잔틴)
+
+    Args:
+        ingredients: 성분 딕셔너리
+
+    Returns:
+        float: 총 함유량 (mg)
+    """
+    if not ingredients:
+        return 0
+
+    total = 0
+    total += _parse_mg_value(ingredients.get('lutein', '0'))
+    total += _parse_mg_value(ingredients.get('zeaxanthin', '0'))
+    total += _parse_mg_value(ingredients.get('meso_zeaxanthin', '0'))
+    return total
+
+
 def render_radar_chart(products_data):
     """
-    5개 제품 다차원 비교 레이더 차트
+    제품 다차원 비교 레이더 차트
+
+    비교 항목:
+    - 신뢰도: AI 분석 신뢰도 점수 (0-100)
+    - 가격점수: 가성비 점수 (가격이 낮을수록 높음, 0-100)
+    - 함유량: 루테인+제아잔틴 총 함유량 점수 (0-100)
+    - 평균평점: 리뷰 평균 평점 (5점 → 100점 환산)
+    - 리뷰다양성: 리뷰어 다양성 비율 (0-100)
 
     Args:
         products_data (list): 제품 분석 결과 리스트
@@ -171,9 +217,17 @@ def render_radar_chart(products_data):
     """
     fig = go.Figure()
 
-    categories = ['신뢰도', '재구매율', '한달사용', '평균평점', '리뷰다양성']
+    categories = ['신뢰도', '가격점수', '함유량', '평균평점', '리뷰다양성']
 
     colors = ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6']
+
+    # 가격 및 함유량 범위 계산 (정규화용)
+    prices = [data["product"].get("price", 0) for data in products_data]
+    contents = [_calculate_total_content(data["product"].get("ingredients", {})) for data in products_data]
+
+    min_price = min(prices) if prices else 0
+    max_price = max(prices) if prices else 1
+    max_content = max(contents) if contents else 1
 
     for idx, data in enumerate(products_data):
         product = data["product"]
@@ -182,12 +236,22 @@ def render_radar_chart(products_data):
 
         # 각 지표 계산 (0-100 스케일로 정규화)
         trust_score = ai_result['trust_score']
-        reorder_rate = sum(1 for r in reviews if r["reorder"]) / len(reviews) * 100 if reviews else 0
-        one_month_rate = sum(1 for r in reviews if r["one_month_use"]) / len(reviews) * 100 if reviews else 0
+
+        # 가격 점수: 가격이 낮을수록 높은 점수 (가성비)
+        price = product.get('price', 0)
+        if max_price > min_price:
+            price_score = (1 - (price - min_price) / (max_price - min_price)) * 100
+        else:
+            price_score = 100  # 모든 가격이 같으면 만점
+
+        # 함유량 점수: 함유량이 높을수록 높은 점수
+        content = _calculate_total_content(product.get("ingredients", {}))
+        content_score = (content / max_content) * 100 if max_content > 0 else 0
+
         avg_rating = sum(r["rating"] for r in reviews) / len(reviews) * 20 if reviews else 0  # 5점 만점 -> 100점 환산
         diversity_rate = len(set(r["reviewer"] for r in reviews)) / len(reviews) * 100 if reviews else 0
 
-        values = [trust_score, reorder_rate, one_month_rate, avg_rating, diversity_rate]
+        values = [trust_score, price_score, content_score, avg_rating, diversity_rate]
 
         fig.add_trace(go.Scatterpolar(
             r=values,
