@@ -1,418 +1,190 @@
-"""
-건기식 리뷰 팩트체크 시스템 - 시각화 컴포넌트
-Plotly 기반 인터랙티브 차트
-"""
-
 import plotly.graph_objects as go
 import plotly.express as px
 import pandas as pd
 import streamlit as st
 
-
-def render_gauge_chart(score, title="신뢰도"):
-    """
-    신뢰도 게이지 차트 렌더링
-
-    Args:
-        score (float): 0-100 사이의 점수
-        title (str): 차트 제목
-
-    Returns:
-        plotly.graph_objects.Figure
-    """
-    # 신뢰도 레벨 결정
-    if score >= 70:
-        color = "#22c55e"  # green
-        level = "HIGH"
-    elif score >= 50:
-        color = "#f59e0b"  # amber
-        level = "MEDIUM"
-    else:
-        color = "#ef4444"  # red
-        level = "LOW"
-
+def render_gauge_chart(score, title="신뢰도 점수"):
+    """신뢰도 게이지 차트 - 크기 및 가시성 개선"""
+    color = "#22c55e" if score >= 70 else "#f59e0b" if score >= 50 else "#ef4444"
+    
     fig = go.Figure(go.Indicator(
-        mode="gauge+number+delta",
+        mode="gauge+number",
         value=score,
-        domain={'x': [0, 1], 'y': [0, 1]},
-        title={'text': title, 'font': {'size': 16}},
-        number={'suffix': "", 'font': {'size': 32, 'color': color}},
+        title={'text': title, 'font': {'size': 20}},
+        number={'font': {'size': 40, 'color': color}},
         gauge={
-            'axis': {'range': [0, 100], 'tickwidth': 1, 'tickcolor': "darkgray"},
-            'bar': {'color': color, 'thickness': 0.75},
-            'bgcolor': "white",
-            'borderwidth': 2,
-            'bordercolor': "gray",
+            'axis': {'range': [0, 100]},
+            'bar': {'color': color},
             'steps': [
-                {'range': [0, 50], 'color': '#fee2e2'},   # red-100
-                {'range': [50, 70], 'color': '#fef3c7'},  # amber-100
-                {'range': [70, 100], 'color': '#dcfce7'}  # green-100
+                {'range': [0, 50], 'color': '#fee2e2'},
+                {'range': [50, 70], 'color': '#fef3c7'},
+                {'range': [70, 100], 'color': '#dcfce7'}
             ],
-            'threshold': {
-                'line': {'color': "darkgray", 'width': 4},
-                'thickness': 0.75,
-                'value': score
-            }
         }
     ))
-
-    fig.update_layout(
-        height=200,
-        margin=dict(l=20, r=20, t=40, b=20),
-        paper_bgcolor="rgba(0,0,0,0)",
-        font={'color': "#1f2937", 'family': "Arial"}
-    )
-
+    fig.update_layout(height=350, margin=dict(l=30, r=30, t=50, b=20), paper_bgcolor="rgba(0,0,0,0)")
     return fig
 
+def render_radar_chart(products_data):
+    """다차원 비교 레이더 차트 - 대형 화면 최적화"""
+    fig = go.Figure()
+    categories = ['신뢰도', '재구매율', '한달사용', '평균평점', '리뷰다양성']
+    colors = ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6']
+
+    for idx, data in enumerate(products_data):
+        p, ai, r = data["product"], data["ai_result"], data["reviews"]
+        # 지표 정규화 (0-100)
+        vals = [
+            ai['trust_score'],
+            (sum(1 for x in r if x["reorder"]) / len(r) * 100) if r else 0,
+            (sum(1 for x in r if x["one_month_use"]) / len(r) * 100) if r else 0,
+            (sum(x["rating"] for x in r) / len(r) * 20) if r else 0,
+            (len(set(x["reviewer"] for x in r)) / len(r) * 100) if r else 0
+        ]
+        fig.add_trace(go.Scatterpolar(r=vals, theta=categories, fill='toself', name=p['brand'],
+                                     line=dict(color=colors[idx % len(colors)], width=3)))
+
+    fig.update_layout(
+        polar=dict(radialaxis=dict(visible=True, range=[0, 100])),
+        height=550, # 차트 크기 확대
+        legend=dict(orientation="h", y=-0.15, x=0.5, xanchor="center"),
+        margin=dict(l=80, r=80, t=40, b=80),
+        font=dict(size=14)
+    )
+    return fig
+
+def render_price_comparison_chart(products_data):
+    """가격 비교 차트 - 가로 폭 강조"""
+    names = [f"{d['product']['brand']}" for d in products_data]
+    prices = [d['product']['price'] for d in products_data]
+    scores = [d['ai_result']['trust_score'] for d in products_data]
+    colors = ['#22c55e' if s >= 70 else '#f59e0b' if s >= 50 else '#ef4444' for s in scores]
+
+    fig = go.Figure(go.Bar(x=names, y=prices, marker_color=colors, text=[f"${p}" for p in prices], textposition='auto'))
+    fig.update_layout(title="제품별 가격 비교 (USD)", height=450, margin=dict(t=60, b=40))
+    return fig
 
 def render_trust_badge(level):
-    """
-    신뢰도 등급 배지 렌더링 (HTML)
-
-    Args:
-        level (str): 'high', 'medium', 'low'
-
-    Returns:
-        str: HTML 배지 코드
-    """
-    badge_configs = {
-        "high": {
-            "text": "HIGH TRUST",
-            "bg_color": "#22c55e",
-            "icon": "✓"
-        },
-        "medium": {
-            "text": "MEDIUM TRUST",
-            "bg_color": "#f59e0b",
-            "icon": "○"
-        },
-        "low": {
-            "text": "LOW TRUST",
-            "bg_color": "#ef4444",
-            "icon": "✕"
-        }
-    }
-
-    config = badge_configs.get(level.lower(), badge_configs["medium"])
-
-    badge_html = f"""
-    <div style="
-        display: inline-block;
-        background-color: {config['bg_color']};
-        color: white;
-        padding: 4px 12px;
-        border-radius: 12px;
-        font-weight: bold;
-        font-size: 12px;
-        text-align: center;
-        margin: 4px 0;
-    ">
-        {config['icon']} {config['text']}
-    </div>
-    """
-
-    return badge_html
+    """신뢰도 등급 배지 HTML 생성"""
+    level = level.lower()
+    if level == "high":
+        color = "#22c55e"
+        text = "HIGH"
+    elif level == "medium":
+        color = "#f59e0b"
+        text = "MEDIUM"
+    else:
+        color = "#ef4444"
+        text = "LOW"
+    
+    return f'<div style="background: {color}; color: white; padding: 8px 16px; border-radius: 20px; display: inline-block; font-weight: bold; font-size: 0.9rem;">{text}</div>'
 
 
 def render_comparison_table(products_data):
-    """
-    제품 비교 테이블 렌더링
-
-    Args:
-        products_data (list): 제품 분석 결과 리스트
-
-    Returns:
-        pandas.DataFrame
-    """
+    """제품 비교 테이블 생성"""
     table_data = []
-
+    
     for data in products_data:
-        product = data["product"]
-        ai_result = data["ai_result"]
-        reviews = data["reviews"]
-        checklist = data["checklist_results"]
-
-        # 광고 의심률 계산
-        ad_suspected = sum(1 for r in reviews if r["rating"] == 5 and not r["one_month_use"] and len(r["text"]) < 100)
-        ad_rate = ad_suspected / len(reviews) * 100 if reviews else 0
-
-        # 재구매율
-        reorder_rate = sum(1 for r in reviews if r["reorder"]) / len(reviews) * 100 if reviews else 0
-
-        # 한달사용 비율
-        one_month_rate = sum(1 for r in reviews if r["one_month_use"]) / len(reviews) * 100 if reviews else 0
-
-        # 평균 평점
-        avg_rating = sum(r["rating"] for r in reviews) / len(reviews) if reviews else 0
-
+        product = data.get("product", {})
+        ai_result = data.get("ai_result", {})
+        reviews = data.get("reviews", [])
+        checklist = data.get("checklist_results", {})
+        
+        # 통계 계산
+        total_reviews = len(reviews)
+        verified_count = sum(1 for r in reviews if r.get("verified", False))
+        reorder_count = sum(1 for r in reviews if r.get("reorder", False))
+        one_month_count = sum(1 for r in reviews if r.get("one_month_use", False))
+        avg_rating = sum(r.get("rating", 5) for r in reviews) / total_reviews if total_reviews > 0 else 0
+        
+        # 광고 의심률
+        ad_suspected = sum(
+            1 for r in reviews
+            if r.get("rating") == 5 and not r.get("one_month_use") and len(r.get("text", "")) < 100
+        )
+        ad_rate = (ad_suspected / total_reviews * 100) if total_reviews > 0 else 0
+        
         table_data.append({
-            "제품명": f"{product['brand']}\n{product['name']}",
-            "신뢰도": f"{ai_result['trust_score']:.1f}",
-            "광고의심률": f"{ad_rate:.1f}%",
-            "재구매율": f"{reorder_rate:.1f}%",
-            "한달사용": f"{one_month_rate:.1f}%",
-            "평균평점": f"{avg_rating:.1f}"
+            "제품명": f"{product.get('brand', '')} {product.get('name', '')}",
+            "신뢰도": f"{ai_result.get('trust_score', 0):.1f}",
+            "등급": ai_result.get('trust_level', 'medium').upper(),
+            "가격 ($)": f"{product.get('price', 0):.2f}",
+            "리뷰 수": f"{total_reviews}개",
+            "평균 평점": f"{avg_rating:.1f}/5",
+            "인증 구매": f"{verified_count/total_reviews*100:.1f}%" if total_reviews > 0 else "0%",
+            "재구매율": f"{reorder_count/total_reviews*100:.1f}%" if total_reviews > 0 else "0%",
+            "1개월+ 사용": f"{one_month_count/total_reviews*100:.1f}%" if total_reviews > 0 else "0%",
+            "광고 의심률": f"{ad_rate:.1f}%"
         })
-
-    df = pd.DataFrame(table_data)
-    return df
-
-
-def _parse_mg_value(value_str):
-    """
-    mg 값 문자열을 숫자로 변환
-
-    Args:
-        value_str: "20mg" 또는 "4.5mg" 형태의 문자열
-
-    Returns:
-        float: mg 값 (파싱 실패 시 0)
-    """
-    if not value_str:
-        return 0
-    try:
-        # "20mg" -> 20, "4.5mg" -> 4.5
-        return float(value_str.replace('mg', '').strip())
-    except (ValueError, AttributeError):
-        return 0
-
-
-def _calculate_total_content(ingredients):
-    """
-    총 함유량 계산 (루테인 + 제아잔틴 + 메소제아잔틴)
-
-    Args:
-        ingredients: 성분 딕셔너리
-
-    Returns:
-        float: 총 함유량 (mg)
-    """
-    if not ingredients:
-        return 0
-
-    total = 0
-    total += _parse_mg_value(ingredients.get('lutein', '0'))
-    total += _parse_mg_value(ingredients.get('zeaxanthin', '0'))
-    total += _parse_mg_value(ingredients.get('meso_zeaxanthin', '0'))
-    return total
-
-
-def render_radar_chart(products_data):
-    """
-    제품 다차원 비교 레이더 차트
-
-    비교 항목:
-    - 신뢰도: AI 분석 신뢰도 점수 (0-100)
-    - 가격점수: 가성비 점수 (가격이 낮을수록 높음, 0-100)
-    - 함유량: 루테인+제아잔틴 총 함유량 점수 (0-100)
-    - 평균평점: 리뷰 평균 평점 (5점 → 100점 환산)
-    - 리뷰다양성: 리뷰어 다양성 비율 (0-100)
-
-    Args:
-        products_data (list): 제품 분석 결과 리스트
-
-    Returns:
-        plotly.graph_objects.Figure
-    """
-    fig = go.Figure()
-
-    categories = ['신뢰도', '가격점수', '함유량', '평균평점', '리뷰다양성']
-
-    colors = ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6']
-
-    # 가격 및 함유량 범위 계산 (정규화용)
-    prices = [data["product"].get("price", 0) for data in products_data]
-    contents = [_calculate_total_content(data["product"].get("ingredients", {})) for data in products_data]
-
-    min_price = min(prices) if prices else 0
-    max_price = max(prices) if prices else 1
-    max_content = max(contents) if contents else 1
-
-    for idx, data in enumerate(products_data):
-        product = data["product"]
-        ai_result = data["ai_result"]
-        reviews = data["reviews"]
-
-        # 각 지표 계산 (0-100 스케일로 정규화)
-        trust_score = ai_result['trust_score']
-
-        # 가격 점수: 가격이 낮을수록 높은 점수 (가성비)
-        price = product.get('price', 0)
-        if max_price > min_price:
-            price_score = (1 - (price - min_price) / (max_price - min_price)) * 100
-        else:
-            price_score = 100  # 모든 가격이 같으면 만점
-
-        # 함유량 점수: 함유량이 높을수록 높은 점수
-        content = _calculate_total_content(product.get("ingredients", {}))
-        content_score = (content / max_content) * 100 if max_content > 0 else 0
-
-        avg_rating = sum(r["rating"] for r in reviews) / len(reviews) * 20 if reviews else 0  # 5점 만점 -> 100점 환산
-        diversity_rate = len(set(r["reviewer"] for r in reviews)) / len(reviews) * 100 if reviews else 0
-
-        values = [trust_score, price_score, content_score, avg_rating, diversity_rate]
-
-        fig.add_trace(go.Scatterpolar(
-            r=values,
-            theta=categories,
-            fill='toself',
-            name=f"{product['brand']}",
-            line=dict(color=colors[idx % len(colors)], width=2),
-            opacity=0.6
-        ))
-
-    fig.update_layout(
-        polar=dict(
-            radialaxis=dict(
-                visible=True,
-                range=[0, 100],
-                tickfont=dict(size=10)
-            ),
-            angularaxis=dict(
-                tickfont=dict(size=11, color="#1f2937")
-            )
-        ),
-        showlegend=True,
-        legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=-0.2,
-            xanchor="center",
-            x=0.5,
-            font=dict(size=10)
-        ),
-        height=400,
-        margin=dict(l=80, r=80, t=40, b=80),
-        paper_bgcolor="rgba(0,0,0,0)",
-        font={'color': "#1f2937", 'family': "Arial"}
-    )
-
-    return fig
+    
+    return pd.DataFrame(table_data)
 
 
 def render_review_sentiment_chart(reviews):
-    """
-    리뷰 감정 분포 차트 (평점별)
-
-    Args:
-        reviews (list): 리뷰 리스트
-
-    Returns:
-        plotly.graph_objects.Figure
-    """
+    """리뷰 감정 분석 차트 (평점 분포)"""
+    if not reviews:
+        # 빈 차트 반환
+        fig = go.Figure()
+        fig.add_annotation(text="리뷰 데이터가 없습니다", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False)
+        fig.update_layout(height=300)
+        return fig
+    
+    # 평점 분포 계산
     rating_counts = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
-
     for review in reviews:
-        rating_counts[review["rating"]] += 1
-
+        rating = review.get("rating", 5)
+        if rating in rating_counts:
+            rating_counts[rating] += 1
+    
+    # 차트 생성
     fig = go.Figure(data=[
         go.Bar(
             x=list(rating_counts.keys()),
             y=list(rating_counts.values()),
-            marker_color=['#ef4444', '#f97316', '#f59e0b', '#22c55e', '#10b981'],
-            text=list(rating_counts.values()),
+            marker_color=['#ef4444', '#f59e0b', '#eab308', '#84cc16', '#22c55e'],
+            text=[f"{count}개" for count in rating_counts.values()],
             textposition='auto',
+            name="리뷰 수"
         )
     ])
-
+    
     fig.update_layout(
         title="평점 분포",
-        xaxis_title="평점 (별점)",
+        xaxis_title="평점",
         yaxis_title="리뷰 수",
-        height=300,
-        margin=dict(l=40, r=40, t=60, b=40),
-        paper_bgcolor="rgba(0,0,0,0)",
-        font={'color': "#1f2937", 'family': "Arial"},
-        showlegend=False
+        height=400,
+        showlegend=False,
+        margin=dict(t=50, b=40, l=50, r=50)
     )
-
+    
     return fig
 
 
 def render_checklist_visual(checklist_results):
-    """
-    8단계 체크리스트 시각화 (Streamlit 네이티브 컴포넌트 사용)
-
-    Args:
-        checklist_results (dict): 체크리스트 결과
-
-    Note:
-        이 함수는 Streamlit 컴포넌트를 직접 렌더링합니다.
-        반환값 없이 직접 UI에 렌더링됩니다.
-    """
-    for key, result in checklist_results.items():
-        step_name = result["description"]
-        rate = result["rate"]
-        passed = result["passed"]
-
-        # 통과 여부에 따른 색상과 아이콘
-        icon = "✅" if passed else "❌"
-        color = "green" if passed else "red"
-
-        # 체크리스트 항목 표시
-        st.markdown(f"{icon} **{step_name}** - :{color}[{rate * 100:.0f}%]")
-        st.progress(rate)
-
-    return None
-
-
-def render_price_comparison_chart(products_data):
-    """
-    가격 비교 차트
-
-    Args:
-        products_data (list): 제품 분석 결과 리스트
-
-    Returns:
-        plotly.graph_objects.Figure
-    """
-    product_names = []
-    prices = []
-    trust_scores = []
-
-    for data in products_data:
-        product = data["product"]
-        ai_result = data["ai_result"]
-
-        product_names.append(f"{product['brand']}")
-        prices.append(product["price"])
-        trust_scores.append(ai_result["trust_score"])
-
-    # 신뢰도에 따른 색상
-    colors = ['#22c55e' if score >= 70 else '#f59e0b' if score >= 50 else '#ef4444' for score in trust_scores]
-
-    fig = go.Figure(data=[
-        go.Bar(
-            x=product_names,
-            y=prices,
-            marker_color=colors,
-            text=[f"${p:.2f}" for p in prices],
-            textposition='auto',
-        )
-    ])
-
-    fig.update_layout(
-        title="제품 가격 비교",
-        xaxis_title="브랜드",
-        yaxis_title="가격 (USD)",
-        height=300,
-        margin=dict(l=40, r=40, t=60, b=80),
-        paper_bgcolor="rgba(0,0,0,0)",
-        font={'color': "#1f2937", 'family': "Arial"},
-        showlegend=False
-    )
-
-    return fig
-
-
-if __name__ == "__main__":
-    print("시각화 컴포넌트 모듈 로드 완료")
-    print("사용 가능한 함수:")
-    print("  - render_gauge_chart(score, title)")
-    print("  - render_trust_badge(level)")
-    print("  - render_comparison_table(products_data)")
-    print("  - render_radar_chart(products_data)")
-    print("  - render_review_sentiment_chart(reviews)")
-    print("  - render_checklist_visual(checklist_results)")
-    print("  - render_price_comparison_chart(products_data)")
+    """8단계 체크리스트 시각화"""
+    if not checklist_results:
+        st.warning("체크리스트 데이터가 없습니다.")
+        return
+    
+    checklist_items = {
+        "1_verified_purchase": "인증 구매",
+        "2_reorder_rate": "재구매율",
+        "3_long_term_use": "장기 사용",
+        "4_rating_distribution": "평점 분포",
+        "5_review_length": "리뷰 길이",
+        "6_time_distribution": "시간 분포",
+        "7_ad_detection": "광고 탐지",
+        "8_reviewer_diversity": "리뷰어 다양성"
+    }
+    
+    for key, label in checklist_items.items():
+        if key in checklist_results:
+            result = checklist_results[key]
+            passed = result.get("passed", False)
+            rate = result.get("rate", 0)
+            
+            status_icon = "✅" if passed else "❌"
+            status_color = "#22c55e" if passed else "#ef4444"
+            
+            st.markdown(f"{status_icon} **{label}**")
+            st.progress(rate, text=f"{rate*100:.1f}%")
