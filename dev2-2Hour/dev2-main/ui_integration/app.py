@@ -792,10 +792,83 @@ def main():
             category_filter = []
             category_changed = False
         
+        # 필터 값 가져오기 (제품 선택에 적용)
+        price_range = st.session_state.get('price_range')
+        rating_range = st.session_state.get('rating_range')
+        review_count_range = st.session_state.get('review_count_range')
+        search_query = st.session_state.get('search_query', '').strip()
+        
+        # 필터 변경 감지 (제품 선택 초기화용) - 필터가 실제로 변경되었을 때만
+        current_filters = (
+            tuple(sorted(category_filter)) if category_filter else (),
+            price_range,
+            rating_range,
+            review_count_range,
+            search_query
+        )
+        previous_filters = st.session_state.get('previous_filters')
+        
+        # 필터가 실제로 변경되었는지 확인
+        filters_changed = False
+        if previous_filters is None:
+            filters_changed = True
+            st.session_state.previous_filters = current_filters
+        else:
+            filters_changed = current_filters != previous_filters
+            if filters_changed:
+                # 필터가 변경되면 제품 선택 초기화 (단, 필터가 더 제한적인 경우에만)
+                # 예: 가격 범위를 줄이면 선택된 제품이 범위 밖일 수 있음
+                main_product_id = st.session_state.get('main_product')
+                if main_product_id:
+                    # 선택된 제품이 필터 조건에 맞는지 확인
+                    main_product_data = next((p for p in filtered_products_by_category if p.get('id') == main_product_id), None)
+                    if not main_product_data:
+                        # 선택된 제품이 필터 조건에 맞지 않으면 초기화
+                        if 'main_product' in st.session_state:
+                            st.session_state.main_product = None
+                        if 'main_product_label' in st.session_state:
+                            st.session_state.main_product_label = ""
+                        if 'main_brand' in st.session_state:
+                            st.session_state.main_brand = ""
+                        if 'compare_products' in st.session_state:
+                            st.session_state.compare_products = []
+                        if 'compare_products_labels' in st.session_state:
+                            st.session_state.compare_products_labels = []
+                st.session_state.previous_filters = current_filters
+        
         # 카테고리 필터링된 제품 목록 (제품 선택용)
         filtered_products_by_category = all_products_list
         if category_filter:
             filtered_products_by_category = [p for p in all_products_list if p.get("category") in category_filter]
+        
+        # 가격 필터 적용
+        if price_range:
+            filtered_products_by_category = [
+                p for p in filtered_products_by_category
+                if price_range[0] <= p.get("price", 0) <= price_range[1]
+            ]
+        
+        # 평점 필터 적용
+        if rating_range:
+            filtered_products_by_category = [
+                p for p in filtered_products_by_category
+                if rating_range[0] <= p.get("rating_avg", 0) <= rating_range[1]
+            ]
+        
+        # 리뷰 수 필터 적용
+        if review_count_range:
+            filtered_products_by_category = [
+                p for p in filtered_products_by_category
+                if review_count_range[0] <= p.get("rating_count", 0) <= review_count_range[1]
+            ]
+        
+        # 검색 필터 적용
+        if search_query:
+            search_lower = search_query.lower()
+            filtered_products_by_category = [
+                p for p in filtered_products_by_category
+                if search_lower in p.get("name", "").lower() or search_lower in p.get("brand", "").lower()
+            ]
         
         # 카테고리 필터링된 브랜드 목록 (제품 선택용)
         filtered_brands = sorted(list(set(p.get("brand", "") for p in filtered_products_by_category if p.get("brand") and p.get("brand"))))
@@ -978,8 +1051,8 @@ def main():
         compare_products_labels = st.session_state.get('compare_products_labels', [])
         
         st.markdown("---")
-        st.markdown("### ⚙️ 필터 설정 (참고용)")
-        st.caption("⚠️ 필터는 제품 선택에 영향을 주지 않습니다. 제품 선택은 위의 카테고리/브랜드/제품 선택으로만 이루어집니다.")
+        st.markdown("### ⚙️ 필터 설정")
+        st.caption("💡 필터를 설정하면 제품 선택 목록이 필터링됩니다. 원하는 조건에 맞는 제품만 표시됩니다.")
         
         # 가격 범위 필터 (별 1~5 등급으로 재설정)
         if all_products_list:
@@ -1293,9 +1366,8 @@ def main():
         return
     
     # 제품 선택 완료 시 자동으로 분석 실행
-    # 필터는 제품 선택에 영향을 주지 않음 - 제품 선택만으로 분석 실행
     if len(selected_labels) >= 1:  # 메인 제품만 선택되어도 분석 실행
-        # 선택된 제품 데이터 가져오기 (필터 없이 직접 선택)
+        # 선택된 제품 데이터 가져오기
         selected_data = []
         for label in selected_labels:
             if label in product_options:
@@ -1314,12 +1386,19 @@ def main():
             st.info(f"📦 메인 제품 선택됨. 비교 제품을 추가하면 더 자세한 분석이 가능합니다.")
         
         st.markdown("---")
+    else:
+        selected_data = []
     
     # ========== 메인 영역: 리뷰 팩트체크 시스템 차트 표시 ==========
-    # 메인 제품 선택 시 바로 차트 표시 (필터 없이)
+    # 메인 제품 선택 시 바로 차트 표시
     
     # 제품 선택 요약
     st.markdown('<div class="section-header">📊 리뷰 팩트체크 시스템</div>', unsafe_allow_html=True)
+    
+    # selected_data가 없으면 여기서 종료
+    if not selected_data or len(selected_data) == 0:
+        st.info("📦 제품을 선택하면 분석 결과가 표시됩니다.")
+        return
     
     st.markdown("### 🎯 선택된 제품")
     
@@ -1327,10 +1406,45 @@ def main():
     compare_options = {}
     compare_options_with_emoji = {}
     if main_product:
+        # 필터 적용하여 비교 제품 목록 구성
         category_filter = st.session_state.get('category_filter', [])
+        price_range = st.session_state.get('price_range')
+        rating_range = st.session_state.get('rating_range')
+        review_count_range = st.session_state.get('review_count_range')
+        search_query = st.session_state.get('search_query', '').strip()
+        
         filtered_products_by_category = all_products_list
         if category_filter:
             filtered_products_by_category = [p for p in all_products_list if p.get("category") in category_filter]
+        
+        # 가격 필터 적용
+        if price_range:
+            filtered_products_by_category = [
+                p for p in filtered_products_by_category
+                if price_range[0] <= p.get("price", 0) <= price_range[1]
+            ]
+        
+        # 평점 필터 적용
+        if rating_range:
+            filtered_products_by_category = [
+                p for p in filtered_products_by_category
+                if rating_range[0] <= p.get("rating_avg", 0) <= rating_range[1]
+            ]
+        
+        # 리뷰 수 필터 적용
+        if review_count_range:
+            filtered_products_by_category = [
+                p for p in filtered_products_by_category
+                if review_count_range[0] <= p.get("rating_count", 0) <= review_count_range[1]
+            ]
+        
+        # 검색 필터 적용
+        if search_query:
+            search_lower = search_query.lower()
+            filtered_products_by_category = [
+                p for p in filtered_products_by_category
+                if search_lower in p.get("name", "").lower() or search_lower in p.get("brand", "").lower()
+            ]
         
         for p in filtered_products_by_category:
             if p.get('id') != main_product:
@@ -1397,17 +1511,19 @@ def main():
                             current_compare_labels = [actual_label]
                         else:
                             current_compare_labels[0] = actual_label
-                    st.session_state.compare_products_labels = current_compare_labels[:2]  # 최대 2개
-                    st.session_state.compare_products = [compare_options[label] for label in st.session_state.compare_products_labels if label in compare_options]
-                    st.rerun()
+                    # 변경사항이 있을 때만 업데이트
+                    old_labels = st.session_state.get('compare_products_labels', [])
+                    if set(current_compare_labels[:2]) != set(old_labels):
+                        st.session_state.compare_products_labels = current_compare_labels[:2]  # 최대 2개
+                        st.session_state.compare_products = [compare_options[label] for label in st.session_state.compare_products_labels if label in compare_options]
             else:
                 # 선택 해제
                 current_compare_labels = st.session_state.get('compare_products_labels', [])
                 if len(current_compare_labels) > 0:
-                    current_compare_labels = current_compare_labels[1:] if len(current_compare_labels) > 1 else []
-                    st.session_state.compare_products_labels = current_compare_labels
-                    st.session_state.compare_products = [compare_options[label] for label in current_compare_labels if label in compare_options]
-                    st.rerun()
+                    new_labels = current_compare_labels[1:] if len(current_compare_labels) > 1 else []
+                    if set(new_labels) != set(current_compare_labels):
+                        st.session_state.compare_products_labels = new_labels
+                        st.session_state.compare_products = [compare_options[label] for label in new_labels if label in compare_options]
         else:
             if len(selected_labels) > 1:
                 st.success(f"**비교 제품 1**: {selected_labels[1]}")
@@ -1468,17 +1584,19 @@ def main():
                             current_compare_labels.append(actual_label)
                         else:
                             current_compare_labels[1] = actual_label
-                        st.session_state.compare_products_labels = current_compare_labels[:2]  # 최대 2개
-                        st.session_state.compare_products = [compare_options[label] for label in st.session_state.compare_products_labels if label in compare_options]
-                        st.rerun()
+                        # 변경사항이 있을 때만 업데이트
+                        old_labels = st.session_state.get('compare_products_labels', [])
+                        if set(current_compare_labels[:2]) != set(old_labels):
+                            st.session_state.compare_products_labels = current_compare_labels[:2]  # 최대 2개
+                            st.session_state.compare_products = [compare_options[label] for label in st.session_state.compare_products_labels if label in compare_options]
             else:
                 # 선택 해제
                 current_compare_labels = st.session_state.get('compare_products_labels', [])
                 if len(current_compare_labels) > 1:
-                    current_compare_labels = current_compare_labels[:1]
-                    st.session_state.compare_products_labels = current_compare_labels
-                    st.session_state.compare_products = [compare_options[label] for label in current_compare_labels if label in compare_options]
-                    st.rerun()
+                    new_labels = current_compare_labels[:1]
+                    if set(new_labels) != set(current_compare_labels):
+                        st.session_state.compare_products_labels = new_labels
+                        st.session_state.compare_products = [compare_options[label] for label in new_labels if label in compare_options]
         else:
             if len(selected_labels) > 2:
                 st.success(f"**비교 제품 2**: {selected_labels[2]}")
@@ -1488,27 +1606,42 @@ def main():
     st.markdown("---")
     
     # 메인 대시보드: 차트 중심 표시
-    st.markdown("### 📈 시각화 분석 차트")
-    
-    # 레이더 차트와 가격 비교를 더 크게 표시
-    col1, col2 = st.columns([1.5, 1])
-    with col1:
-        st.markdown("#### 🕸️ 다차원 비교 (레이더 차트)")
-        st.caption("신뢰도, 재구매율, 장기사용, 평균평점, 리뷰다양성을 한눈에 비교")
-        try:
-            fig_radar = render_radar_chart(selected_data)
-            st.plotly_chart(fig_radar, use_container_width=True, height=600)
-        except Exception as e:
-            st.error(f"레이더 차트 생성 실패: {e}")
-    
-    with col2:
-        st.markdown("#### 💰 가격 및 신뢰도 비교")
-        st.caption("제품별 가격과 신뢰도 점수 비교")
-        try:
-            fig_price = render_price_comparison_chart(selected_data)
-            st.plotly_chart(fig_price, use_container_width=True, height=400)
-        except Exception as e:
-            st.error(f"가격 비교 차트 생성 실패: {e}")
+    if selected_data and len(selected_data) > 0:
+        st.markdown("### 📈 시각화 분석 차트")
+        
+        # 레이더 차트와 가격 비교를 더 크게 표시
+        col1, col2 = st.columns([1.5, 1])
+        with col1:
+            st.markdown("#### 🕸️ 다차원 비교 (레이더 차트)")
+            st.caption("신뢰도, 재구매율, 장기사용, 평균평점, 리뷰다양성을 한눈에 비교")
+            try:
+                if len(selected_data) > 0:
+                    fig_radar = render_radar_chart(selected_data)
+                    st.plotly_chart(fig_radar, use_container_width=True, height=600)
+                else:
+                    st.info("비교할 제품을 선택해주세요.")
+            except Exception as e:
+                st.error(f"레이더 차트 생성 실패: {e}")
+                import traceback
+                with st.expander("상세 에러 정보"):
+                    st.code(traceback.format_exc())
+        
+        with col2:
+            st.markdown("#### 💰 가격 및 신뢰도 비교")
+            st.caption("제품별 가격과 신뢰도 점수 비교")
+            try:
+                if len(selected_data) > 0:
+                    fig_price = render_price_comparison_chart(selected_data)
+                    st.plotly_chart(fig_price, use_container_width=True, height=400)
+                else:
+                    st.info("비교할 제품을 선택해주세요.")
+            except Exception as e:
+                st.error(f"가격 비교 차트 생성 실패: {e}")
+                import traceback
+                with st.expander("상세 에러 정보"):
+                    st.code(traceback.format_exc())
+    else:
+        st.info("📊 제품을 선택하면 차트가 표시됩니다.")
         
         # 신뢰도 요약 카드
         st.markdown("#### 📊 신뢰도 요약")
