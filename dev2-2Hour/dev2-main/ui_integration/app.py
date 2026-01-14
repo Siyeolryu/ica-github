@@ -761,7 +761,7 @@ def main():
         st.markdown("---")
         st.markdown("### 🔍 제품 선택")
         
-        # 1단계: 카테고리 선택
+        # 1단계: 카테고리 선택 (제품 선택에만 사용, 필터와 분리)
         if categories:
             # 이전 카테고리 선택 가져오기
             previous_category_filter = st.session_state.get('category_filter', categories)
@@ -769,7 +769,8 @@ def main():
                 "📂 카테고리 선택",
                 options=categories,
                 default=previous_category_filter,
-                key="category_filter"
+                key="category_filter",
+                help="제품 선택을 위한 카테고리 필터입니다. 필터 설정과는 별개로 작동합니다."
             )
             
             # 카테고리가 변경되었는지 확인 (추가/제거)
@@ -791,12 +792,12 @@ def main():
             category_filter = []
             category_changed = False
         
-        # 카테고리 필터링된 제품 목록
+        # 카테고리 필터링된 제품 목록 (제품 선택용)
         filtered_products_by_category = all_products_list
         if category_filter:
             filtered_products_by_category = [p for p in all_products_list if p.get("category") in category_filter]
         
-        # 카테고리 필터링된 브랜드 목록
+        # 카테고리 필터링된 브랜드 목록 (제품 선택용)
         filtered_brands = sorted(list(set(p.get("brand", "") for p in filtered_products_by_category if p.get("brand") and p.get("brand"))))
         
         # 2단계: 브랜드 1개(메인) 선택
@@ -943,7 +944,8 @@ def main():
                 st.session_state.compare_products_labels = []
         
         st.markdown("---")
-        st.markdown("### ⚙️ 필터 설정")
+        st.markdown("### ⚙️ 필터 설정 (참고용)")
+        st.caption("⚠️ 필터는 제품 선택에 영향을 주지 않습니다. 제품 선택은 위의 카테고리/브랜드/제품 선택으로만 이루어집니다.")
         
         # 가격 범위 필터 (별 1~5 등급으로 재설정)
         if all_products_list:
@@ -1220,115 +1222,101 @@ def main():
         st.warning("선택된 제품을 찾을 수 없습니다.")
         return
     
-    # 제품 선택 완료 시 자동으로 분석 실행 안내
-    if len(selected_labels) >= 3:  # 메인 1개 + 비교 2개
-        st.info("🎯 제품 선택 완료! 리뷰 팩트체크 분석이 자동으로 실행됩니다.")
-    
-    # 필터 값 수집 및 검증 (리뷰날짜, 언어 필터 제거)
-    filters_dict = {
-        'category_filter': st.session_state.get('category_filter', []),
-        'main_brand': st.session_state.get('main_brand', ''),
-        'price_range': st.session_state.get('price_range', None),
-        'rating_range': st.session_state.get('rating_range', None),
-        'review_count_range': st.session_state.get('review_count_range', None),
-        'trust_filter': st.session_state.get('trust_filter', []),
-        'search_query': st.session_state.get('search_query', '')
-    }
-    
-    # 필터 검증
-    validation_errors = validate_filters(filters_dict)
-    if validation_errors:
-        for error in validation_errors:
-            st.error(f"⚠️ {error}")
-        st.stop()  # 필터 적용 중단
-    
-    # 필터 상태 표시 (사이드바 상단)
-    with st.sidebar:
-        active_filters = get_active_filters_summary(filters_dict, all_products_list)
-        if active_filters:
-            st.markdown("---")
-            st.info(f"🔍 활성 필터: {len(active_filters)}개")
-            for f in active_filters:
-                st.caption(f"  • {f}")
-    
-    # 필터링 적용 (로딩 표시)
-    with st.spinner("필터 적용 중..."):
-        selected_data = [all_data[product_options[label]] for label in selected_labels]
-    
-        # 카테고리 필터 적용 (Supabase category 필드)
-        category_filter = filters_dict.get('category_filter', [])
-        if category_filter:
-            selected_data = [
-                d for d in selected_data
-                if d.get("product", {}).get("category", "") in category_filter
-            ]
+    # 제품 선택 완료 시 자동으로 분석 실행
+    # 필터는 제품 선택에 영향을 주지 않음 - 제품 선택만으로 분석 실행
+    if len(selected_labels) >= 1:  # 메인 제품만 선택되어도 분석 실행
+        # 선택된 제품 데이터 가져오기 (필터 없이 직접 선택)
+        selected_data = []
+        for label in selected_labels:
+            if label in product_options:
+                product_id = product_options[label]
+                if product_id in all_data:
+                    selected_data.append(all_data[product_id])
         
-        # 브랜드 필터 적용 (메인 브랜드만)
-        main_brand = filters_dict.get('main_brand', '')
-        if main_brand:
-            selected_data = [
-                d for d in selected_data
-                if d.get("product", {}).get("brand", "") == main_brand
-            ]
+        if not selected_data:
+            st.warning("선택된 제품 데이터를 찾을 수 없습니다.")
+            return
         
-        # 가격 필터 적용
-        price_range = filters_dict.get('price_range')
-        if price_range:
-            selected_data = [
-                d for d in selected_data
-                if price_range[0] <= d.get("product", {}).get("price", 0) <= price_range[1]
-            ]
+        # 제품 선택 완료 안내
+        if len(selected_labels) >= 3:  # 메인 1개 + 비교 2개
+            st.success(f"🎯 제품 선택 완료! {len(selected_data)}개 제품 리뷰 팩트체크 분석 시작!")
+        else:
+            st.info(f"📦 메인 제품 선택됨. 비교 제품을 추가하면 더 자세한 분석이 가능합니다.")
         
-        # 평점 범위 필터 적용 (Supabase rating_avg 필드)
-        rating_range = filters_dict.get('rating_range')
-        if rating_range:
-            selected_data = [
-                d for d in selected_data
-                if rating_range[0] <= d.get("product", {}).get("rating_avg", 0) <= rating_range[1]
-            ]
-        
-        # 리뷰 수 범위 필터 적용 (Supabase rating_count 필드)
-        review_count_range = filters_dict.get('review_count_range')
-        if review_count_range:
-            selected_data = [
-                d for d in selected_data
-                if review_count_range[0] <= d.get("product", {}).get("rating_count", 0) <= review_count_range[1]
-            ]
-        
-        # 신뢰도 필터 적용
-        trust_filter = filters_dict.get('trust_filter', [])
-        if trust_filter:
-            selected_data = [
-                d for d in selected_data
-                if d.get("ai_result", {}).get("trust_level", "").upper() in [f.upper() for f in trust_filter]
-            ]
-        
-        # 검색 필터 적용
-        search_query = filters_dict.get('search_query', '')
-        if search_query:
-            search_results = search_products(search_query)
-            search_ids = [p.get("id") for p in search_results]
-            selected_data = [
-                d for d in selected_data
-                if d.get("product", {}).get("id") in search_ids
-            ]
-        
-        # 날짜 필터 및 언어 필터 제거됨 (사용자 요청)
-    
-    # 필터 적용 결과 피드백
-    if not selected_data:
-        st.warning("⚠️ 필터 조건에 맞는 제품이 없습니다.")
-        return
-    else:
-        # 필터 상태를 히스토리에 저장 (자동)
-        save_filter_state_to_history(filters_dict)
-        
-        # 결과 미리보기 및 분석 시작 안내
-        st.success(f"✅ {len(selected_data)}개 제품 분석 시작!")
         st.markdown("---")
     
-    # ========== 메인 영역: 탭 구성 ==========
-    # 제품 선택 완료 시 자동으로 첫 번째 탭(종합 비교 분석)에 차트 표시
+    # ========== 메인 영역: 리뷰 팩트체크 시스템 차트 표시 ==========
+    # 메인 제품 선택 시 바로 차트 표시 (필터 없이)
+    
+    # 제품 선택 요약
+    st.markdown('<div class="section-header">📊 리뷰 팩트체크 시스템</div>', unsafe_allow_html=True)
+    
+    st.markdown("### 🎯 선택된 제품")
+    col_summary1, col_summary2, col_summary3 = st.columns(3)
+    with col_summary1:
+        st.info(f"**메인 제품**: {selected_labels[0] if selected_labels else '없음'}")
+    with col_summary2:
+        if len(selected_labels) > 1:
+            st.success(f"**비교 제품 1**: {selected_labels[1]}")
+        else:
+            st.caption("비교 제품 미선택")
+    with col_summary3:
+        if len(selected_labels) > 2:
+            st.success(f"**비교 제품 2**: {selected_labels[2]}")
+        else:
+            st.caption("비교 제품 미선택")
+    
+    st.markdown("---")
+    
+    # 메인 대시보드: 차트 중심 표시
+    st.markdown("### 📈 시각화 분석 차트")
+    
+    # 레이더 차트와 가격 비교를 더 크게 표시
+    col1, col2 = st.columns([1.5, 1])
+    with col1:
+        st.markdown("#### 🕸️ 다차원 비교 (레이더 차트)")
+        st.caption("신뢰도, 재구매율, 장기사용, 평균평점, 리뷰다양성을 한눈에 비교")
+        try:
+            fig_radar = render_radar_chart(selected_data)
+            st.plotly_chart(fig_radar, use_container_width=True, height=600)
+        except Exception as e:
+            st.error(f"레이더 차트 생성 실패: {e}")
+    
+    with col2:
+        st.markdown("#### 💰 가격 및 신뢰도 비교")
+        st.caption("제품별 가격과 신뢰도 점수 비교")
+        try:
+            fig_price = render_price_comparison_chart(selected_data)
+            st.plotly_chart(fig_price, use_container_width=True, height=400)
+        except Exception as e:
+            st.error(f"가격 비교 차트 생성 실패: {e}")
+        
+        # 신뢰도 요약 카드
+        st.markdown("#### 📊 신뢰도 요약")
+        for data in selected_data:
+            product = data.get("product", {})
+            ai_result = data.get("ai_result", {})
+            trust_score = ai_result.get("trust_score", 0)
+            trust_level = ai_result.get("trust_level", "medium")
+            
+            col_card1, col_card2 = st.columns([2, 1])
+            with col_card1:
+                st.markdown(f"**{product.get('brand', '')}**")
+            with col_card2:
+                st.markdown(render_trust_badge(trust_level), unsafe_allow_html=True)
+            st.progress(trust_score / 100, text=f"{trust_score:.1f}점")
+    
+    st.markdown("---")
+    st.markdown("#### 📋 세부 지표 비교표")
+    try:
+        comparison_df = render_comparison_table(selected_data)
+        st.dataframe(comparison_df, use_container_width=True, hide_index=True, height=400)
+    except Exception as e:
+        st.error(f"비교표 생성 실패: {e}")
+    
+    st.markdown("---")
+    
+    # ========== 추가 분석 탭 ==========
     tab1, tab2, tab3, tab4 = st.tabs([
         "📊 종합 비교 분석",
         "💊 AI 제품별 정밀 진단",
@@ -1336,23 +1324,9 @@ def main():
         "📈 상세 통계 분석"
     ])
     
-    # 탭 1: 종합 비교 분석 (리뷰 팩트체크 시스템 - 차트 중심)
+    # 탭 1: 종합 비교 분석 (상세 보기)
     with tab1:
-        st.markdown('<div class="section-header">📊 리뷰 팩트체크 시스템 - 종합 비교 분석</div>', unsafe_allow_html=True)
-        
-        # 제품 선택 요약
-        st.markdown("### 🎯 선택된 제품")
-        col_summary1, col_summary2, col_summary3 = st.columns(3)
-        with col_summary1:
-            st.info(f"**메인 제품**: {selected_labels[0] if selected_labels else '없음'}")
-        with col_summary2:
-            if len(selected_labels) > 1:
-                st.success(f"**비교 제품 1**: {selected_labels[1]}")
-        with col_summary3:
-            if len(selected_labels) > 2:
-                st.success(f"**비교 제품 2**: {selected_labels[2]}")
-        
-        st.markdown("---")
+        st.markdown('<div class="section-header">📊 종합 비교 분석 - 상세 보기</div>', unsafe_allow_html=True)
         
         # 레이더 차트와 가격 비교를 더 크게 표시
         st.markdown("### 📈 시각화 분석 차트")
@@ -1360,14 +1334,20 @@ def main():
         with col1:
             st.markdown("#### 🕸️ 다차원 비교 (레이더 차트)")
             st.caption("신뢰도, 재구매율, 장기사용, 평균평점, 리뷰다양성을 한눈에 비교")
-            fig_radar = render_radar_chart(selected_data)
-            st.plotly_chart(fig_radar, use_container_width=True, height=600)
+            try:
+                fig_radar = render_radar_chart(selected_data)
+                st.plotly_chart(fig_radar, use_container_width=True, height=600)
+            except Exception as e:
+                st.error(f"레이더 차트 생성 실패: {e}")
         
         with col2:
             st.markdown("#### 💰 가격 및 신뢰도 비교")
             st.caption("제품별 가격과 신뢰도 점수 비교")
-            fig_price = render_price_comparison_chart(selected_data)
-            st.plotly_chart(fig_price, use_container_width=True, height=400)
+            try:
+                fig_price = render_price_comparison_chart(selected_data)
+                st.plotly_chart(fig_price, use_container_width=True, height=400)
+            except Exception as e:
+                st.error(f"가격 비교 차트 생성 실패: {e}")
             
             # 신뢰도 요약 카드
             st.markdown("#### 📊 신뢰도 요약")
@@ -1386,8 +1366,11 @@ def main():
         
         st.markdown("---")
         st.markdown("#### 📋 세부 지표 비교표")
-        comparison_df = render_comparison_table(selected_data)
-        st.dataframe(comparison_df, use_container_width=True, hide_index=True, height=400)
+        try:
+            comparison_df = render_comparison_table(selected_data)
+            st.dataframe(comparison_df, use_container_width=True, hide_index=True, height=400)
+        except Exception as e:
+            st.error(f"비교표 생성 실패: {e}")
     
     # 탭 2: AI 제품별 정밀 진단
     with tab2:
