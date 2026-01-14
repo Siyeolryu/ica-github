@@ -961,6 +961,8 @@ def main():
                     if recommended_products:
                         st.session_state.compare_products_labels = recommended_products
                         st.session_state.compare_products = [all_compare_options[label] for label in recommended_products]
+                        # 추천 제품 목록을 세션 상태에 저장 (이모지 표시용)
+                        st.session_state.recommended_products_labels = recommended_products
                         st.success(f"✨ 비교 제품 자동 추천 (다른 브랜드): {', '.join(recommended_products)}")
         else:
             main_product = None
@@ -989,13 +991,43 @@ def main():
             previous_compare_labels = st.session_state.get('compare_products_labels', [])
             valid_compare_labels = [label for label in previous_compare_labels if label in compare_options.keys()]
             
-            compare_products_labels = st.multiselect(
+            # 추천 제품 목록 가져오기
+            recommended_products_labels = st.session_state.get('recommended_products_labels', [])
+            
+            # 비교 제품 옵션에 추천 이모지 추가
+            compare_options_with_emoji = []
+            for label in compare_options.keys():
+                if label in recommended_products_labels:
+                    compare_options_with_emoji.append(f"⭐ {label} (추천)")
+                else:
+                    compare_options_with_emoji.append(label)
+            
+            # 현재 선택된 비교 제품 라벨 (이모지 포함)
+            default_display_labels = []
+            for label in valid_compare_labels:
+                if label in recommended_products_labels:
+                    default_display_labels.append(f"⭐ {label} (추천)")
+                else:
+                    default_display_labels.append(label)
+            
+            compare_products_labels_display = st.multiselect(
                 "🔄 비교 제품 선택 (최대 2개) - 다른 브랜드 자동 추천됨",
-                options=list(compare_options.keys()),
-                default=valid_compare_labels,
+                options=compare_options_with_emoji,
+                default=default_display_labels,
                 max_selections=2,
                 key="compare_products_select"
             )
+            
+            # 선택된 제품에서 이모지 제거하여 실제 라벨 추출
+            compare_products_labels = []
+            for selected in compare_products_labels_display:
+                if selected.startswith("⭐ "):
+                    actual_label = selected.replace("⭐ ", "").replace(" (추천)", "")
+                else:
+                    actual_label = selected
+                if actual_label in compare_options:
+                    compare_products_labels.append(actual_label)
+            
             compare_products = [compare_options[label] for label in compare_products_labels]
             st.session_state.compare_products = compare_products
             st.session_state.compare_products_labels = compare_products_labels
@@ -1300,6 +1332,10 @@ def main():
                     compare_products_labels.extend(additional_recommended)
                     st.session_state.compare_products = compare_products
                     st.session_state.compare_products_labels = compare_products_labels
+                    # 추천 제품 목록 업데이트
+                    recommended_list = st.session_state.get('recommended_products_labels', [])
+                    recommended_list.extend(additional_recommended)
+                    st.session_state.recommended_products_labels = list(set(recommended_list))  # 중복 제거
     
     # 선택된 제품 목록 구성 (메인 + 비교 제품)
     selected_product_ids = [main_product] + compare_products[:2]  # 최대 2개만 사용
@@ -1357,6 +1393,79 @@ def main():
             st.success(f"**비교 제품 2**: {selected_labels[2]}")
         else:
             st.caption("비교 제품 미선택")
+    
+    # 비교 제품 선택 UI (메인 대시보드)
+    if main_product:
+        st.markdown("---")
+        st.markdown("#### 🔄 비교 제품 선택")
+        
+        # 비교 제품 옵션 구성 (전체 제품 목록에서 메인 제품 제외)
+        category_filter = st.session_state.get('category_filter', [])
+        filtered_products_by_category = all_products_list
+        if category_filter:
+            filtered_products_by_category = [p for p in all_products_list if p.get("category") in category_filter]
+        
+        compare_options = {}
+        for p in filtered_products_by_category:
+            if p.get('id') != main_product:
+                compare_label = f"{p.get('brand', '')} {p.get('name', '')}"
+                compare_options[compare_label] = p.get('id')
+        
+        if compare_options:
+            # 추천 제품 목록 가져오기
+            recommended_products_labels = st.session_state.get('recommended_products_labels', [])
+            
+            # 비교 제품 옵션에 추천 이모지 추가
+            compare_options_with_emoji = []
+            for label in compare_options.keys():
+                if label in recommended_products_labels:
+                    compare_options_with_emoji.append(f"⭐ {label} (추천)")
+                else:
+                    compare_options_with_emoji.append(label)
+            
+            # 현재 선택된 비교 제품 라벨
+            current_compare_labels = st.session_state.get('compare_products_labels', [])
+            # 이모지가 포함된 옵션에서 기본값 찾기
+            default_indices = []
+            for label in current_compare_labels:
+                if label in compare_options:
+                    if label in recommended_products_labels:
+                        display_label = f"⭐ {label} (추천)"
+                    else:
+                        display_label = label
+                    if display_label in compare_options_with_emoji:
+                        default_indices.append(compare_options_with_emoji.index(display_label))
+            
+            # 비교 제품 선택 (multiselect)
+            selected_compare_indices = st.multiselect(
+                "비교 제품을 선택하세요 (최대 2개)",
+                options=compare_options_with_emoji,
+                default=[compare_options_with_emoji[i] for i in default_indices] if default_indices else [],
+                max_selections=2,
+                key="compare_products_dashboard"
+            )
+            
+            # 선택된 제품에서 이모지 제거하여 실제 라벨 추출
+            selected_compare_labels = []
+            for selected in selected_compare_indices:
+                if selected.startswith("⭐ "):
+                    # "⭐ 브랜드 제품명 (추천)" 형식에서 실제 라벨 추출
+                    actual_label = selected.replace("⭐ ", "").replace(" (추천)", "")
+                else:
+                    actual_label = selected
+                if actual_label in compare_options:
+                    selected_compare_labels.append(actual_label)
+            
+            # 세션 상태 업데이트 (변경된 경우에만)
+            if set(selected_compare_labels) != set(current_compare_labels):
+                st.session_state.compare_products_labels = selected_compare_labels
+                st.session_state.compare_products = [compare_options[label] for label in selected_compare_labels]
+                # 변경사항 반영을 위해 rerun
+                if 'compare_products_updated' not in st.session_state:
+                    st.session_state.compare_products_updated = True
+                    st.rerun()
+                else:
+                    st.session_state.compare_products_updated = False
     
     st.markdown("---")
     
