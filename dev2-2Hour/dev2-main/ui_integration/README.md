@@ -6,11 +6,11 @@
 
 ```
 ui_integration/
-├── app.py                  # 메인 Streamlit 앱
-├── mock_data.py            # 목업 데이터 (제품 5종 + 리뷰 100개)
-├── visualizations.py       # 차트 컴포넌트 (Plotly)
-├── requirements.txt        # 의존성
-└── README.md              # 이 파일
+├── app.py                  # [Main] Tab 기반 동적 대시보드 로직
+├── visualizations.py       # [Chart] Plotly 기반 고해상도 시각화 컴포넌트
+├── mock_data.py            # [Data] 제품 및 리뷰 분석 데이터 세트
+├── requirements.txt        # [Env] 프로젝트 의존성 관리
+└── README.md               # [Doc] 프로젝트 명세서
 ```
 
 ## 설치 방법

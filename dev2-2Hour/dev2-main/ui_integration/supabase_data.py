@@ -8,50 +8,241 @@ import os
 import requests
 from typing import Dict, List, Optional
 
-# Streamlit Cloud secrets 또는 환경 변수에서 설정 로드
+# 디버그 모드
+DEBUG = True
+
 def _get_config():
     """Streamlit secrets 또는 환경 변수에서 Supabase 설정 가져오기"""
+    supabase_url = None
+    supabase_key = None
+    source = "none"
+
+    # 1. Streamlit Cloud secrets 먼저 시도
     try:
         import streamlit as st
-        # Streamlit Cloud secrets 사용
-        if hasattr(st, 'secrets') and 'SUPABASE_URL' in st.secrets:
-            return st.secrets['SUPABASE_URL'], st.secrets['SUPABASE_ANON_KEY']
-    except:
-        pass
+        if hasattr(st, 'secrets'):
+            if 'SUPABASE_URL' in st.secrets:
+                supabase_url = st.secrets['SUPABASE_URL']
+                supabase_key = st.secrets.get('SUPABASE_ANON_KEY')
+                source = "streamlit_secrets"
+                if DEBUG:
+                    st.sidebar.write(f"Config source: {source}")
+                    st.sidebar.write(f"URL loaded: {'Yes' if supabase_url else 'No'}")
+                    st.sidebar.write(f"Key loaded: {'Yes' if supabase_key else 'No'}")
+    except Exception as e:
+        if DEBUG:
+            print(f"Streamlit secrets error: {e}")
 
-    # 로컬 환경: .env 파일 사용
-    try:
-        from dotenv import load_dotenv
-        load_dotenv()
-    except:
-        pass
+    # 2. 환경 변수에서 시도 (secrets가 없는 경우)
+    if not supabase_url:
+        try:
+            from dotenv import load_dotenv
+            load_dotenv()
+        except:
+            pass
 
-    return os.getenv('SUPABASE_URL'), os.getenv('SUPABASE_ANON_KEY')
+        supabase_url = os.getenv('SUPABASE_URL')
+        supabase_key = os.getenv('SUPABASE_ANON_KEY')
+        if supabase_url:
+            source = "env_vars"
 
-SUPABASE_URL, SUPABASE_KEY = _get_config()
+    if DEBUG:
+        print(f"[DEBUG] Config source: {source}")
+        print(f"[DEBUG] SUPABASE_URL: {supabase_url[:50] if supabase_url else 'None'}...")
+        print(f"[DEBUG] SUPABASE_KEY: {'Set' if supabase_key else 'None'}")
+
+    return supabase_url, supabase_key
+
+# 설정을 함수 호출 시점에 로드 (lazy loading)
+_config_cache = None
+
+def _get_cached_config():
+    global _config_cache
+    if _config_cache is None:
+        _config_cache = _get_config()
+    return _config_cache
+
+def _get_supabase_url():
+    return _get_cached_config()[0]
+
+def _get_supabase_key():
+    return _get_cached_config()[1]
 
 def _get_headers():
     """API 요청 헤더 반환"""
+    key = _get_supabase_key()
     return {
-        'apikey': SUPABASE_KEY,
-        'Authorization': f'Bearer {SUPABASE_KEY}',
+        'apikey': key,
+        'Authorization': f'Bearer {key}',
         'Content-Type': 'application/json'
     }
 
 
 def _fetch_from_supabase(table: str, params: str = '') -> List[Dict]:
     """Supabase REST API에서 데이터 가져오기"""
-    if not SUPABASE_URL or not SUPABASE_KEY:
+    supabase_url = _get_supabase_url()
+    supabase_key = _get_supabase_key()
+
+    if not supabase_url or not supabase_key:
         print("Supabase 설정이 없습니다. secrets.toml 또는 .env 파일을 확인하세요.")
+        # Streamlit에서 경고 표시
+        try:
+            import streamlit as st
+            st.error("Supabase 연결 실패: secrets 설정을 확인하세요.")
+            st.info("Settings > Secrets에서 SUPABASE_URL과 SUPABASE_ANON_KEY를 설정하세요.")
+        except:
+            pass
         return []
 
-    url = f'{SUPABASE_URL}/rest/v1/{table}?{params}'
+    url = f'{supabase_url}/rest/v1/{table}?{params}'
     response = requests.get(url, headers=_get_headers())
     if response.status_code == 200:
         return response.json()
     else:
         print(f"Error fetching {table}: {response.status_code} - {response.text}")
         return []
+
+
+def get_products_by_category(category: str) -> List[Dict]:
+    """카테고리별 제품 조회"""
+    if not category:
+        return get_all_products()
+    products = _fetch_from_supabase('products', f'select=*&category=eq.{category}&order=rating_count.desc')
+    formatted = []
+    for p in products:
+        price = p.get('price') or 0
+        formatted.append({
+            "id": str(p['id']),
+            "name": p.get('title', ''),
+            "brand": p.get('brand', ''),
+            "price": price / 100 if price > 1000 else price,
+            "serving_size": "1 Softgel",
+            "servings_per_container": 60,
+            "ingredients": {"lutein": "20mg", "zeaxanthin": "4mg"},
+            "product_url": p.get('url', ''),
+            "rating_avg": p.get('rating_avg') or 0,
+            "rating_count": p.get('rating_count') or 0,
+            "category": p.get('category', '')
+        })
+    return formatted
+
+
+def get_products_by_rating_range(min_rating: float, max_rating: float) -> List[Dict]:
+    """평점 범위별 제품 조회"""
+    products = _fetch_from_supabase('products', f'select=*&rating_avg=gte.{min_rating}&rating_avg=lte.{max_rating}&order=rating_count.desc')
+    formatted = []
+    for p in products:
+        price = p.get('price') or 0
+        formatted.append({
+            "id": str(p['id']),
+            "name": p.get('title', ''),
+            "brand": p.get('brand', ''),
+            "price": price / 100 if price > 1000 else price,
+            "serving_size": "1 Softgel",
+            "servings_per_container": 60,
+            "ingredients": {"lutein": "20mg", "zeaxanthin": "4mg"},
+            "product_url": p.get('url', ''),
+            "rating_avg": p.get('rating_avg') or 0,
+            "rating_count": p.get('rating_count') or 0,
+            "category": p.get('category', '')
+        })
+    return formatted
+
+
+def get_reviews_by_date_range(start_date: str, end_date: str) -> List[Dict]:
+    """날짜 범위별 리뷰 조회"""
+    reviews = _fetch_from_supabase('reviews', f'select=*&review_date=gte.{start_date}&review_date=lte.{end_date}&order=review_date.desc')
+    formatted = []
+    for r in reviews:
+        formatted.append({
+            "product_id": str(r.get('product_id', '')),
+            "text": r.get('body', ''),
+            "rating": r.get('rating', 5),
+            "date": r.get('review_date', ''),
+            "reorder": False,
+            "one_month_use": len(r.get('body', '')) > 100,
+            "reviewer": r.get('author', 'Anonymous'),
+            "verified": True,
+            "helpful_count": r.get('helpful_count', 0),
+            "language": r.get('language', 'ko')
+        })
+    return formatted
+
+
+def get_reviews_by_language(language: str) -> List[Dict]:
+    """언어별 리뷰 조회"""
+    reviews = _fetch_from_supabase('reviews', f'select=*&language=eq.{language}&order=review_date.desc')
+    formatted = []
+    for r in reviews:
+        formatted.append({
+            "product_id": str(r.get('product_id', '')),
+            "text": r.get('body', ''),
+            "rating": r.get('rating', 5),
+            "date": r.get('review_date', ''),
+            "reorder": False,
+            "one_month_use": len(r.get('body', '')) > 100,
+            "reviewer": r.get('author', 'Anonymous'),
+            "verified": True,
+            "helpful_count": r.get('helpful_count', 0),
+            "language": r.get('language', 'ko')
+        })
+    return formatted
+
+
+def get_all_categories() -> List[str]:
+    """모든 카테고리 목록 반환"""
+    products = _fetch_from_supabase('products', 'select=category')
+    categories = sorted(list(set(p.get('category') for p in products if p.get('category'))))
+    return categories
+
+
+def get_statistics_summary() -> Dict:
+    """전체 통계 요약 반환"""
+    products = _fetch_from_supabase('products', 'select=*')
+    reviews = _fetch_from_supabase('reviews', 'select=*')
+    
+    total_products = len(products)
+    total_reviews = len(reviews)
+    
+    # 브랜드별 통계
+    brands = {}
+    for p in products:
+        brand = p.get('brand', 'Unknown')
+        if brand not in brands:
+            brands[brand] = {'count': 0, 'total_rating': 0, 'total_reviews': 0}
+        brands[brand]['count'] += 1
+        if p.get('rating_avg'):
+            brands[brand]['total_rating'] += p.get('rating_avg', 0)
+        if p.get('rating_count'):
+            brands[brand]['total_reviews'] += p.get('rating_count', 0)
+    
+    # 카테고리별 통계
+    categories = {}
+    for p in products:
+        category = p.get('category', 'Unknown')
+        if category not in categories:
+            categories[category] = {'count': 0}
+        categories[category]['count'] += 1
+    
+    # 평점 분포
+    rating_distribution = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
+    for r in reviews:
+        rating = r.get('rating')
+        if rating and rating in rating_distribution:
+            rating_distribution[rating] += 1
+    
+    # 평균 가격
+    prices = [p.get('price', 0) for p in products if p.get('price')]
+    avg_price = sum(prices) / len(prices) if prices else 0
+    
+    return {
+        'total_products': total_products,
+        'total_reviews': total_reviews,
+        'brands': brands,
+        'categories': categories,
+        'rating_distribution': rating_distribution,
+        'avg_price': avg_price
+    }
 
 
 def get_all_products() -> List[Dict]:
@@ -118,7 +309,10 @@ def get_reviews_by_product(product_id: str) -> List[Dict]:
             "reorder": False,  # Supabase에 해당 필드가 없으면 기본값
             "one_month_use": len(r.get('body', '')) > 100,  # 리뷰 길이로 추정
             "reviewer": r.get('author', 'Anonymous'),
-            "verified": True  # 기본값
+            "verified": True,  # 기본값
+            "helpful_count": r.get('helpful_count', 0),  # Supabase helpful_count 필드
+            "language": r.get('language', 'ko'),  # Supabase language 필드
+            "title": r.get('title', '')  # Supabase title 필드
         })
     return formatted
 
