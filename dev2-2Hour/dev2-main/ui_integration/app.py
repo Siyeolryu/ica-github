@@ -163,20 +163,23 @@ def get_active_filters_summary(filters: Dict, all_products_list: List[Dict]) -> 
     
     return active_filters
 
-def reset_all_filters(all_products_list: List[Dict], categories: List[str], brands: List[str]):
+def reset_all_filters(all_products_list: List[Dict], categories: Optional[List[str]], brands: Optional[List[str]]):
     """모든 필터를 초기 상태로 리셋"""
-    # 초기값 설정
-    if categories:
+    # 안전한 초기값 설정
+    # categories 처리: None 체크 및 리스트 타입 확인
+    if categories is not None and isinstance(categories, list) and len(categories) > 0:
         st.session_state.category_filter = categories.copy()
     else:
         st.session_state.category_filter = []
     
-    if brands:
+    # brands 처리: None 체크 및 리스트 타입 확인
+    if brands is not None and isinstance(brands, list) and len(brands) > 0:
         st.session_state.brand_filter = brands.copy()
     else:
         st.session_state.brand_filter = []
     
-    if all_products_list:
+    # 가격 범위 초기화
+    if all_products_list and isinstance(all_products_list, list) and len(all_products_list) > 0:
         prices = [p.get("price", 0) for p in all_products_list if p.get("price") and p.get("price") > 0]
         if prices:
             st.session_state.price_range = (float(min(prices)), float(max(prices)))
@@ -189,13 +192,17 @@ def reset_all_filters(all_products_list: List[Dict], categories: List[str], bran
         if review_counts:
             st.session_state.review_count_range = (int(min(review_counts)), int(max(review_counts)))
     
+    # 기본 필터 값 설정
     st.session_state.trust_filter = ["HIGH", "MEDIUM", "LOW"]
+    
+    # 선택적 필터 초기화 (존재하는 경우에만)
     if 'search_query' in st.session_state:
         st.session_state.search_query = ""
     if 'review_start_date' in st.session_state:
         st.session_state.review_start_date = None
     if 'review_end_date' in st.session_state:
         st.session_state.review_end_date = None
+    
     st.session_state.language_filter = ["all"]
 
 try:
@@ -689,9 +696,9 @@ def main():
     product_options = {f"{v['product']['brand']} {v['product']['name']}": k for k, v in all_data.items()}
     
     # 캐싱된 제품 목록 및 카테고리 가져오기 (성능 최적화)
-    all_products_list = get_cached_products()
-    categories = get_cached_categories()
-    brands = sorted(list(set(p.get("brand", "") for p in all_products_list if p.get("brand"))))
+    all_products_list = get_cached_products() or []
+    categories = get_cached_categories() or []
+    brands = sorted(list(set(p.get("brand", "") for p in all_products_list if p.get("brand") and p.get("brand")))) if all_products_list else []
     
     # ========== 사이드바: 개선된 탭 구조 ==========
     with st.sidebar:
@@ -774,8 +781,9 @@ def main():
             else:
                 category_filter = []
             
-            # 브랜드 필터
-            brands = sorted(list(set(p.get("brand", "") for p in all_products_list if p.get("brand"))))
+            # 브랜드 필터 (전역 brands 변수 사용, 없으면 재계산)
+            if not brands and all_products_list:
+                brands = sorted(list(set(p.get("brand", "") for p in all_products_list if p.get("brand") and p.get("brand"))))
             if brands:
                 brand_filter = st.multiselect(
                     "🏷️ 브랜드",
@@ -866,7 +874,11 @@ def main():
             col_reset, col_save = st.columns(2)
             with col_reset:
                 if st.button("🔄 초기화", use_container_width=True, type="secondary", key="reset_filters"):
-                    reset_all_filters(all_products_list, categories, brands)
+                    # 안전한 초기화: None 체크 후 전달
+                    safe_categories = categories if (categories is not None and isinstance(categories, list)) else []
+                    safe_brands = brands if (brands is not None and isinstance(brands, list)) else []
+                    safe_products = all_products_list if (all_products_list is not None and isinstance(all_products_list, list)) else []
+                    reset_all_filters(safe_products, safe_categories, safe_brands)
                     st.rerun()
             with col_save:
                 if st.button("💾 저장", use_container_width=True, type="secondary", key="save_filters"):
