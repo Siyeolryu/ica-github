@@ -103,6 +103,148 @@ def _fetch_from_supabase(table: str, params: str = '') -> List[Dict]:
         return []
 
 
+def get_products_by_category(category: str) -> List[Dict]:
+    """카테고리별 제품 조회"""
+    if not category:
+        return get_all_products()
+    products = _fetch_from_supabase('products', f'select=*&category=eq.{category}&order=rating_count.desc')
+    formatted = []
+    for p in products:
+        price = p.get('price') or 0
+        formatted.append({
+            "id": str(p['id']),
+            "name": p.get('title', ''),
+            "brand": p.get('brand', ''),
+            "price": price / 100 if price > 1000 else price,
+            "serving_size": "1 Softgel",
+            "servings_per_container": 60,
+            "ingredients": {"lutein": "20mg", "zeaxanthin": "4mg"},
+            "product_url": p.get('url', ''),
+            "rating_avg": p.get('rating_avg') or 0,
+            "rating_count": p.get('rating_count') or 0,
+            "category": p.get('category', '')
+        })
+    return formatted
+
+
+def get_products_by_rating_range(min_rating: float, max_rating: float) -> List[Dict]:
+    """평점 범위별 제품 조회"""
+    products = _fetch_from_supabase('products', f'select=*&rating_avg=gte.{min_rating}&rating_avg=lte.{max_rating}&order=rating_count.desc')
+    formatted = []
+    for p in products:
+        price = p.get('price') or 0
+        formatted.append({
+            "id": str(p['id']),
+            "name": p.get('title', ''),
+            "brand": p.get('brand', ''),
+            "price": price / 100 if price > 1000 else price,
+            "serving_size": "1 Softgel",
+            "servings_per_container": 60,
+            "ingredients": {"lutein": "20mg", "zeaxanthin": "4mg"},
+            "product_url": p.get('url', ''),
+            "rating_avg": p.get('rating_avg') or 0,
+            "rating_count": p.get('rating_count') or 0,
+            "category": p.get('category', '')
+        })
+    return formatted
+
+
+def get_reviews_by_date_range(start_date: str, end_date: str) -> List[Dict]:
+    """날짜 범위별 리뷰 조회"""
+    reviews = _fetch_from_supabase('reviews', f'select=*&review_date=gte.{start_date}&review_date=lte.{end_date}&order=review_date.desc')
+    formatted = []
+    for r in reviews:
+        formatted.append({
+            "product_id": str(r.get('product_id', '')),
+            "text": r.get('body', ''),
+            "rating": r.get('rating', 5),
+            "date": r.get('review_date', ''),
+            "reorder": False,
+            "one_month_use": len(r.get('body', '')) > 100,
+            "reviewer": r.get('author', 'Anonymous'),
+            "verified": True,
+            "helpful_count": r.get('helpful_count', 0),
+            "language": r.get('language', 'ko')
+        })
+    return formatted
+
+
+def get_reviews_by_language(language: str) -> List[Dict]:
+    """언어별 리뷰 조회"""
+    reviews = _fetch_from_supabase('reviews', f'select=*&language=eq.{language}&order=review_date.desc')
+    formatted = []
+    for r in reviews:
+        formatted.append({
+            "product_id": str(r.get('product_id', '')),
+            "text": r.get('body', ''),
+            "rating": r.get('rating', 5),
+            "date": r.get('review_date', ''),
+            "reorder": False,
+            "one_month_use": len(r.get('body', '')) > 100,
+            "reviewer": r.get('author', 'Anonymous'),
+            "verified": True,
+            "helpful_count": r.get('helpful_count', 0),
+            "language": r.get('language', 'ko')
+        })
+    return formatted
+
+
+def get_all_categories() -> List[str]:
+    """모든 카테고리 목록 반환"""
+    products = _fetch_from_supabase('products', 'select=category')
+    categories = sorted(list(set(p.get('category') for p in products if p.get('category'))))
+    return categories
+
+
+def get_statistics_summary() -> Dict:
+    """전체 통계 요약 반환"""
+    products = _fetch_from_supabase('products', 'select=*')
+    reviews = _fetch_from_supabase('reviews', 'select=*')
+    
+    total_products = len(products)
+    total_reviews = len(reviews)
+    
+    # 브랜드별 통계
+    brands = {}
+    for p in products:
+        brand = p.get('brand', 'Unknown')
+        if brand not in brands:
+            brands[brand] = {'count': 0, 'total_rating': 0, 'total_reviews': 0}
+        brands[brand]['count'] += 1
+        if p.get('rating_avg'):
+            brands[brand]['total_rating'] += p.get('rating_avg', 0)
+        if p.get('rating_count'):
+            brands[brand]['total_reviews'] += p.get('rating_count', 0)
+    
+    # 카테고리별 통계
+    categories = {}
+    for p in products:
+        category = p.get('category', 'Unknown')
+        if category not in categories:
+            categories[category] = {'count': 0}
+        categories[category]['count'] += 1
+    
+    # 평점 분포
+    rating_distribution = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
+    for r in reviews:
+        rating = r.get('rating')
+        if rating and rating in rating_distribution:
+            rating_distribution[rating] += 1
+    
+    # 평균 가격
+    prices = [p.get('price', 0) for p in products if p.get('price')]
+    avg_price = sum(prices) / len(prices) if prices else 0
+    
+    return {
+        'total_products': total_products,
+        'total_reviews': total_reviews,
+        'brands': brands,
+        'categories': categories,
+        'rating_distribution': rating_distribution,
+        'avg_price': avg_price
+    }
+
+
 def get_all_products() -> List[Dict]:
     """모든 제품 정보 반환"""
     products = _fetch_from_supabase('products', 'select=*&order=rating_count.desc')
@@ -167,7 +309,10 @@ def get_reviews_by_product(product_id: str) -> List[Dict]:
             "reorder": False,  # Supabase에 해당 필드가 없으면 기본값
             "one_month_use": len(r.get('body', '')) > 100,  # 리뷰 길이로 추정
             "reviewer": r.get('author', 'Anonymous'),
-            "verified": True  # 기본값
+            "verified": True,  # 기본값
+            "helpful_count": r.get('helpful_count', 0),  # Supabase helpful_count 필드
+            "language": r.get('language', 'ko'),  # Supabase language 필드
+            "title": r.get('title', '')  # Supabase title 필드
         })
     return formatted
 
