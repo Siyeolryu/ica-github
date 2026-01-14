@@ -830,27 +830,52 @@ def main():
         if main_brand:
             filtered_products_by_brand = [p for p in filtered_products_by_category if p.get("brand") == main_brand]
         
-        # 제품 옵션 생성 (브랜드 + 제품명)
-        product_options_filtered = {f"{p.get('brand', '')} {p.get('name', '')}": p.get('id') for p in filtered_products_by_brand}
+        # 제품 옵션 생성 (메인 브랜드 선택 시 브랜드명 제외, 그 외에는 브랜드 + 제품명)
+        if main_brand:
+            # 메인 브랜드가 선택된 경우: 제품명만 표시
+            product_options_filtered = {p.get('name', ''): p.get('id') for p in filtered_products_by_brand}
+            # 내부적으로는 브랜드+제품명으로 저장 (다른 곳에서 사용하기 위해)
+            product_options_filtered_full = {f"{p.get('brand', '')} {p.get('name', '')}": p.get('id') for p in filtered_products_by_brand}
+        else:
+            # 메인 브랜드가 선택되지 않은 경우: 브랜드 + 제품명 표시
+            product_options_filtered = {f"{p.get('brand', '')} {p.get('name', '')}": p.get('id') for p in filtered_products_by_brand}
+            product_options_filtered_full = product_options_filtered
         
         # 3단계: 제품 1개(메인) 선택
         if product_options_filtered:
-            # 세션 상태의 제품 라벨이 필터링된 목록에 있는지 안전하게 확인
+            # 세션 상태의 제품 라벨 확인 (브랜드+제품명 형식으로 저장되어 있을 수 있음)
             current_main_product_label = st.session_state.get('main_product_label', '')
             safe_index = 0
-            if current_main_product_label and current_main_product_label in product_options_filtered.keys():
-                try:
-                    safe_index = list(product_options_filtered.keys()).index(current_main_product_label) + 1
-                except (ValueError, IndexError):
-                    safe_index = 0
             
-            main_product_label = st.selectbox(
+            # 현재 라벨이 표시용 옵션에 있는지 확인
+            if current_main_product_label:
+                # 브랜드+제품명 형식인 경우 제품명만 추출
+                if main_brand and current_main_product_label.startswith(main_brand):
+                    current_label_display = current_main_product_label.replace(f"{main_brand} ", "", 1)
+                else:
+                    current_label_display = current_main_product_label
+                
+                if current_label_display in product_options_filtered.keys():
+                    try:
+                        safe_index = list(product_options_filtered.keys()).index(current_label_display) + 1
+                    except (ValueError, IndexError):
+                        safe_index = 0
+            
+            main_product_label_display = st.selectbox(
                 "📦 메인 제품 선택 (1개)",
                 options=[""] + list(product_options_filtered.keys()),
                 index=safe_index,
                 key="main_product_select"
             )
-            main_product = product_options_filtered.get(main_product_label) if main_product_label else None
+            
+            # 선택된 제품 ID 찾기
+            main_product = product_options_filtered.get(main_product_label_display) if main_product_label_display else None
+            
+            # 내부적으로는 브랜드+제품명 형식으로 저장
+            if main_product and main_brand:
+                main_product_label = f"{main_brand} {main_product_label_display}"
+            else:
+                main_product_label = main_product_label_display
             
             # 메인 제품이 변경되었는지 확인
             previous_main_product = st.session_state.get('main_product')
@@ -861,15 +886,25 @@ def main():
             
             # 메인 제품이 선택되고 변경되었을 때 자동 추천 실행
             if main_product and main_product_changed:
-                # 비교 제품 목록 (메인 제품 제외)
-                compare_options = {k: v for k, v in product_options_filtered.items() if v != main_product}
+                # 비교 제품 목록 (전체 제품 목록에서 메인 제품 제외, 다른 브랜드 우선)
+                # 전체 제품 목록에서 비교 제품 후보 찾기 (카테고리 필터링된 목록 사용)
+                all_compare_options = {}
+                for p in filtered_products_by_category:
+                    if p.get('id') != main_product:
+                        if main_brand:
+                            # 메인 브랜드가 선택된 경우: 다른 브랜드 제품은 브랜드+제품명으로 표시
+                            compare_label = f"{p.get('brand', '')} {p.get('name', '')}"
+                        else:
+                            # 메인 브랜드가 선택되지 않은 경우: 브랜드+제품명으로 표시
+                            compare_label = f"{p.get('brand', '')} {p.get('name', '')}"
+                        all_compare_options[compare_label] = p.get('id')
                 
-                if compare_options:
-                    # 자동 추천 로직: 메인 제품과 유사한 제품 2개 추천
+                if all_compare_options:
+                    # 자동 추천 로직: 다른 브랜드 제품 2개 추천
                     recommended_products = []
                     
                     # 메인 제품 정보 가져오기
-                    main_product_data = next((p for p in filtered_products_by_brand if p.get('id') == main_product), None)
+                    main_product_data = next((p for p in filtered_products_by_category if p.get('id') == main_product), None)
                     
                     if main_product_data:
                         main_category = main_product_data.get('category', '')
@@ -877,18 +912,21 @@ def main():
                         main_price = main_product_data.get('price', 0)
                         main_rating = main_product_data.get('rating_avg', 0)
                         
-                        # 추천 점수 계산 (같은 카테고리 > 같은 브랜드 > 비슷한 가격 > 비슷한 평점)
+                        # 추천 점수 계산 (다른 브랜드 우선 > 같은 카테고리 > 비슷한 가격 > 비슷한 평점)
                         scored_products = []
-                        for label, product_id in compare_options.items():
-                            product_data = next((p for p in filtered_products_by_brand if p.get('id') == product_id), None)
+                        for label, product_id in all_compare_options.items():
+                            product_data = next((p for p in filtered_products_by_category if p.get('id') == product_id), None)
                             if product_data:
                                 score = 0
+                                # 다른 브랜드면 +20점 (우선순위 최상)
+                                if product_data.get('brand') != main_brand_name:
+                                    score += 20
                                 # 같은 카테고리면 +10점
                                 if product_data.get('category') == main_category:
                                     score += 10
-                                # 같은 브랜드면 +5점
+                                # 같은 브랜드면 -10점 (페널티)
                                 if product_data.get('brand') == main_brand_name:
-                                    score += 5
+                                    score -= 10
                                 # 가격 차이가 작을수록 높은 점수 (차이 $10당 -1점)
                                 price_diff = abs(product_data.get('price', 0) - main_price)
                                 score += max(0, 5 - price_diff / 10)
@@ -896,17 +934,34 @@ def main():
                                 rating_diff = abs(product_data.get('rating_avg', 0) - main_rating)
                                 score += max(0, 5 - rating_diff / 0.5)
                                 
-                                scored_products.append((score, label, product_id))
+                                scored_products.append((score, label, product_id, product_data.get('brand', '')))
                         
-                        # 점수 순으로 정렬하여 상위 2개 선택
+                        # 점수 순으로 정렬하여 상위 2개 선택 (다른 브랜드 2개)
                         scored_products.sort(key=lambda x: x[0], reverse=True)
-                        recommended_products = [label for _, label, _ in scored_products[:2]]
+                        
+                        # 다른 브랜드 제품 2개 선택
+                        selected_brands = {main_brand_name}  # 메인 브랜드 제외
+                        
+                        for score, label, product_id, brand in scored_products:
+                            if brand not in selected_brands:
+                                recommended_products.append(label)
+                                selected_brands.add(brand)
+                                if len(recommended_products) >= 2:
+                                    break
+                        
+                        # 다른 브랜드 제품이 2개 미만이면 나머지 채우기
+                        if len(recommended_products) < 2:
+                            for score, label, product_id, brand in scored_products:
+                                if label not in recommended_products:
+                                    recommended_products.append(label)
+                                    if len(recommended_products) >= 2:
+                                        break
                     
                     # 자동 추천된 제품으로 설정
                     if recommended_products:
                         st.session_state.compare_products_labels = recommended_products
-                        st.session_state.compare_products = [compare_options[label] for label in recommended_products]
-                        st.success(f"✨ 비교 제품 자동 추천: {', '.join(recommended_products)}")
+                        st.session_state.compare_products = [all_compare_options[label] for label in recommended_products]
+                        st.success(f"✨ 비교 제품 자동 추천 (다른 브랜드): {', '.join(recommended_products)}")
         else:
             main_product = None
             main_product_label = ""
@@ -916,8 +971,17 @@ def main():
             if 'compare_products_labels' in st.session_state:
                 st.session_state.compare_products_labels = []
         
-        # 비교 제품 목록 (메인 제품 제외)
-        compare_options = {k: v for k, v in product_options_filtered.items() if v != main_product} if main_product else {}
+        # 비교 제품 목록 (전체 제품 목록에서 메인 제품 제외)
+        if main_product:
+            # 전체 카테고리 필터링된 제품 목록에서 비교 제품 후보 찾기
+            compare_options = {}
+            for p in filtered_products_by_category:
+                if p.get('id') != main_product:
+                    # 비교 제품은 항상 브랜드+제품명으로 표시
+                    compare_label = f"{p.get('brand', '')} {p.get('name', '')}"
+                    compare_options[compare_label] = p.get('id')
+        else:
+            compare_options = {}
         
         # 4단계: 비교 제품 선택 (최대 2개) - 자동 추천된 제품 표시
         if compare_options:
@@ -926,7 +990,7 @@ def main():
             valid_compare_labels = [label for label in previous_compare_labels if label in compare_options.keys()]
             
             compare_products_labels = st.multiselect(
-                "🔄 비교 제품 선택 (최대 2개) - 자동 추천됨",
+                "🔄 비교 제품 선택 (최대 2개) - 다른 브랜드 자동 추천됨",
                 options=list(compare_options.keys()),
                 default=valid_compare_labels,
                 max_selections=2,
@@ -1156,7 +1220,7 @@ def main():
         st.warning("메인 제품을 선택해주세요.")
         return
     
-    # 비교 제품이 2개 미만이면 자동으로 추가 추천
+    # 비교 제품이 2개 미만이면 자동으로 추가 추천 (다른 브랜드 우선)
     if len(compare_products) < 2:
         # 필터링된 제품 목록 재구성
         category_filter = st.session_state.get('category_filter', [])
@@ -1164,16 +1228,16 @@ def main():
         if category_filter:
             filtered_products_by_category = [p for p in all_products_list if p.get("category") in category_filter]
         
-        filtered_products_by_brand = filtered_products_by_category
-        if main_brand:
-            filtered_products_by_brand = [p for p in filtered_products_by_category if p.get("brand") == main_brand]
-        
-        product_options_filtered = {f"{p.get('brand', '')} {p.get('name', '')}": p.get('id') for p in filtered_products_by_brand}
-        compare_options = {k: v for k, v in product_options_filtered.items() if v != main_product and v not in compare_products}
+        # 비교 제품은 전체 카테고리에서 선택 (다른 브랜드 우선)
+        compare_options = {}
+        for p in filtered_products_by_category:
+            if p.get('id') != main_product and p.get('id') not in compare_products:
+                compare_label = f"{p.get('brand', '')} {p.get('name', '')}"
+                compare_options[compare_label] = p.get('id')
         
         if compare_options:
             # 메인 제품 정보 가져오기
-            main_product_data = next((p for p in filtered_products_by_brand if p.get('id') == main_product), None)
+            main_product_data = next((p for p in filtered_products_by_category if p.get('id') == main_product), None)
             
             if main_product_data:
                 main_category = main_product_data.get('category', '')
@@ -1181,26 +1245,54 @@ def main():
                 main_price = main_product_data.get('price', 0)
                 main_rating = main_product_data.get('rating_avg', 0)
                 
-                # 추천 점수 계산
+                # 추천 점수 계산 (다른 브랜드 우선)
                 scored_products = []
                 for label, product_id in compare_options.items():
-                    product_data = next((p for p in filtered_products_by_brand if p.get('id') == product_id), None)
+                    product_data = next((p for p in filtered_products_by_category if p.get('id') == product_id), None)
                     if product_data:
                         score = 0
+                        # 다른 브랜드면 +20점 (우선순위 최상)
+                        if product_data.get('brand') != main_brand_name:
+                            score += 20
+                        # 같은 카테고리면 +10점
                         if product_data.get('category') == main_category:
                             score += 10
+                        # 같은 브랜드면 -10점 (페널티)
                         if product_data.get('brand') == main_brand_name:
-                            score += 5
+                            score -= 10
                         price_diff = abs(product_data.get('price', 0) - main_price)
                         score += max(0, 5 - price_diff / 10)
                         rating_diff = abs(product_data.get('rating_avg', 0) - main_rating)
                         score += max(0, 5 - rating_diff / 0.5)
-                        scored_products.append((score, label, product_id))
+                        scored_products.append((score, label, product_id, product_data.get('brand', '')))
                 
-                # 점수 순으로 정렬하여 부족한 만큼 추가
+                # 점수 순으로 정렬
                 scored_products.sort(key=lambda x: x[0], reverse=True)
+                
+                # 다른 브랜드 제품 우선 선택
                 needed_count = 2 - len(compare_products)
-                additional_recommended = [label for _, label, _ in scored_products[:needed_count]]
+                additional_recommended = []
+                selected_brands = {main_brand_name}
+                # 이미 선택된 비교 제품의 브랜드도 제외
+                for cp_id in compare_products:
+                    cp_data = next((p for p in filtered_products_by_category if p.get('id') == cp_id), None)
+                    if cp_data:
+                        selected_brands.add(cp_data.get('brand', ''))
+                
+                for score, label, product_id, brand in scored_products:
+                    if brand not in selected_brands:
+                        additional_recommended.append(label)
+                        selected_brands.add(brand)
+                        if len(additional_recommended) >= needed_count:
+                            break
+                
+                # 다른 브랜드 제품이 부족하면 나머지 채우기
+                if len(additional_recommended) < needed_count:
+                    for score, label, product_id, brand in scored_products:
+                        if label not in additional_recommended:
+                            additional_recommended.append(label)
+                            if len(additional_recommended) >= needed_count:
+                                break
                 
                 if additional_recommended:
                     compare_products.extend([compare_options[label] for label in additional_recommended])
@@ -1327,50 +1419,22 @@ def main():
     # 탭 1: 종합 비교 분석 (상세 보기)
     with tab1:
         st.markdown('<div class="section-header">📊 종합 비교 분석 - 상세 보기</div>', unsafe_allow_html=True)
+        st.info("💡 메인 대시보드에서 차트를 확인하실 수 있습니다. 이 탭에서는 추가 분석 정보를 제공합니다.")
         
-        # 레이더 차트와 가격 비교를 더 크게 표시
-        st.markdown("### 📈 시각화 분석 차트")
-        col1, col2 = st.columns([1.5, 1])
-        with col1:
-            st.markdown("#### 🕸️ 다차원 비교 (레이더 차트)")
-            st.caption("신뢰도, 재구매율, 장기사용, 평균평점, 리뷰다양성을 한눈에 비교")
-            try:
-                fig_radar = render_radar_chart(selected_data)
-                st.plotly_chart(fig_radar, use_container_width=True, height=600)
-            except Exception as e:
-                st.error(f"레이더 차트 생성 실패: {e}")
-        
-        with col2:
-            st.markdown("#### 💰 가격 및 신뢰도 비교")
-            st.caption("제품별 가격과 신뢰도 점수 비교")
-            try:
-                fig_price = render_price_comparison_chart(selected_data)
-                st.plotly_chart(fig_price, use_container_width=True, height=400)
-            except Exception as e:
-                st.error(f"가격 비교 차트 생성 실패: {e}")
+        # 추가 분석 정보 표시 (차트는 메인 대시보드에만 표시)
+        st.markdown("### 📊 제품별 상세 정보")
+        for idx, data in enumerate(selected_data):
+            product = data.get("product", {})
+            ai_result = data.get("ai_result", {})
             
-            # 신뢰도 요약 카드
-            st.markdown("#### 📊 신뢰도 요약")
-            for data in selected_data:
-                product = data.get("product", {})
-                ai_result = data.get("ai_result", {})
-                trust_score = ai_result.get("trust_score", 0)
-                trust_level = ai_result.get("trust_level", "medium")
-                
-                col_card1, col_card2 = st.columns([2, 1])
-                with col_card1:
-                    st.markdown(f"**{product.get('brand', '')}**")
-                with col_card2:
-                    st.markdown(render_trust_badge(trust_level), unsafe_allow_html=True)
-                st.progress(trust_score / 100, text=f"{trust_score:.1f}점")
-        
-        st.markdown("---")
-        st.markdown("#### 📋 세부 지표 비교표")
-        try:
-            comparison_df = render_comparison_table(selected_data)
-            st.dataframe(comparison_df, use_container_width=True, hide_index=True, height=400)
-        except Exception as e:
-            st.error(f"비교표 생성 실패: {e}")
+            with st.expander(f"📌 {product.get('brand', '')} {product.get('name', '')}", expanded=False):
+                col_info1, col_info2 = st.columns(2)
+                with col_info1:
+                    st.metric("신뢰도 점수", f"{ai_result.get('trust_score', 0):.1f}")
+                    st.metric("가격", f"${product.get('price', 0):.2f}")
+                with col_info2:
+                    st.metric("평균 평점", f"{product.get('rating_avg', 0):.1f}/5")
+                    st.metric("리뷰 수", f"{product.get('rating_count', 0)}개")
     
     # 탭 2: AI 제품별 정밀 진단
     with tab2:
