@@ -763,14 +763,33 @@ def main():
         
         # 1단계: 카테고리 선택
         if categories:
+            # 이전 카테고리 선택 가져오기
+            previous_category_filter = st.session_state.get('category_filter', categories)
             category_filter = st.multiselect(
                 "📂 카테고리 선택",
                 options=categories,
-                default=st.session_state.get('category_filter', categories),
+                default=previous_category_filter,
                 key="category_filter"
             )
+            
+            # 카테고리가 변경되었는지 확인 (추가/제거)
+            category_changed = set(category_filter) != set(previous_category_filter)
+            
+            # 카테고리가 변경되면 관련 선택 초기화
+            if category_changed:
+                if 'main_brand' in st.session_state:
+                    st.session_state.main_brand = ""
+                if 'main_product' in st.session_state:
+                    st.session_state.main_product = None
+                if 'main_product_label' in st.session_state:
+                    st.session_state.main_product_label = ""
+                if 'compare_products' in st.session_state:
+                    st.session_state.compare_products = []
+                if 'compare_products_labels' in st.session_state:
+                    st.session_state.compare_products_labels = []
         else:
             category_filter = []
+            category_changed = False
         
         # 카테고리 필터링된 제품 목록
         filtered_products_by_category = all_products_list
@@ -782,14 +801,28 @@ def main():
         
         # 2단계: 브랜드 1개(메인) 선택
         if filtered_brands:
+            # 세션 상태의 브랜드가 필터링된 목록에 있는지 안전하게 확인
+            current_main_brand = st.session_state.get('main_brand', '')
+            safe_index = 0
+            if current_main_brand and current_main_brand in filtered_brands:
+                try:
+                    safe_index = filtered_brands.index(current_main_brand) + 1
+                except (ValueError, IndexError):
+                    safe_index = 0
+            
             main_brand = st.selectbox(
                 "🏷️ 메인 브랜드 선택 (1개)",
                 options=[""] + filtered_brands,
-                index=0 if not st.session_state.get('main_brand') else (filtered_brands.index(st.session_state.get('main_brand')) + 1 if st.session_state.get('main_brand') in filtered_brands else 0),
+                index=safe_index,
                 key="main_brand"
             )
         else:
             main_brand = ""
+            # 브랜드가 없으면 제품도 초기화
+            if 'main_product' in st.session_state:
+                st.session_state.main_product = None
+            if 'main_product_label' in st.session_state:
+                st.session_state.main_product_label = ""
         
         # 브랜드 필터링된 제품 목록
         filtered_products_by_brand = filtered_products_by_category
@@ -801,10 +834,19 @@ def main():
         
         # 3단계: 제품 1개(메인) 선택
         if product_options_filtered:
+            # 세션 상태의 제품 라벨이 필터링된 목록에 있는지 안전하게 확인
+            current_main_product_label = st.session_state.get('main_product_label', '')
+            safe_index = 0
+            if current_main_product_label and current_main_product_label in product_options_filtered.keys():
+                try:
+                    safe_index = list(product_options_filtered.keys()).index(current_main_product_label) + 1
+                except (ValueError, IndexError):
+                    safe_index = 0
+            
             main_product_label = st.selectbox(
                 "📦 메인 제품 선택 (1개)",
                 options=[""] + list(product_options_filtered.keys()),
-                index=0 if not st.session_state.get('main_product') else (list(product_options_filtered.keys()).index(st.session_state.get('main_product_label', "")) + 1 if st.session_state.get('main_product_label') in product_options_filtered.keys() else 0),
+                index=safe_index,
                 key="main_product_select"
             )
             main_product = product_options_filtered.get(main_product_label) if main_product_label else None
@@ -813,16 +855,25 @@ def main():
         else:
             main_product = None
             main_product_label = ""
+            # 제품이 없으면 비교 제품도 초기화
+            if 'compare_products' in st.session_state:
+                st.session_state.compare_products = []
+            if 'compare_products_labels' in st.session_state:
+                st.session_state.compare_products_labels = []
         
         # 비교 제품 목록 (메인 제품 제외)
         compare_options = {k: v for k, v in product_options_filtered.items() if v != main_product}
         
         # 4단계: 비교 제품 선택 (최대 2개)
         if compare_options:
+            # 세션 상태의 비교 제품 라벨 중 유효한 것만 필터링
+            previous_compare_labels = st.session_state.get('compare_products_labels', [])
+            valid_compare_labels = [label for label in previous_compare_labels if label in compare_options.keys()]
+            
             compare_products_labels = st.multiselect(
                 "🔄 비교 제품 선택 (최대 2개)",
                 options=list(compare_options.keys()),
-                default=st.session_state.get('compare_products_labels', []),
+                default=valid_compare_labels,
                 max_selections=2,
                 key="compare_products_select"
             )
@@ -831,6 +882,11 @@ def main():
             st.session_state.compare_products_labels = compare_products_labels
         else:
             compare_products = []
+            compare_products_labels = []
+            if 'compare_products' in st.session_state:
+                st.session_state.compare_products = []
+            if 'compare_products_labels' in st.session_state:
+                st.session_state.compare_products_labels = []
         
         st.markdown("---")
         st.markdown("### ⚙️ 필터 설정")
