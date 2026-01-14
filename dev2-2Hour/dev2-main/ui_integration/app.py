@@ -58,10 +58,7 @@ def validate_filters(filters: Dict) -> List[str]:
     """필터 값 검증 및 에러 메시지 반환"""
     errors = []
     
-    # 날짜 검증
-    if filters.get('start_date') and filters.get('end_date'):
-        if filters['start_date'] > filters['end_date']:
-            errors.append("시작일은 종료일보다 이전이어야 합니다")
+    # 날짜 검증 제거됨 (필터 삭제)
     
     # 가격 범위 검증
     if filters.get('price_range'):
@@ -155,11 +152,10 @@ def get_active_filters_summary(filters: Dict, all_products_list: List[Dict]) -> 
     if filters.get('search_query'):
         active_filters.append(f"검색: '{filters['search_query']}'")
     
-    if filters.get('start_date') and filters.get('end_date'):
-        active_filters.append(f"날짜: {filters['start_date']} ~ {filters['end_date']}")
+    if filters.get('main_brand'):
+        active_filters.append(f"메인 브랜드: {filters['main_brand']}")
     
-    if filters.get('language_filter') and "all" not in filters['language_filter']:
-        active_filters.append(f"언어: {', '.join(filters['language_filter'])}")
+    # 날짜 필터 및 언어 필터 제거됨
     
     return active_filters
 
@@ -198,12 +194,18 @@ def reset_all_filters(all_products_list: List[Dict], categories: Optional[List[s
     # 선택적 필터 초기화 (존재하는 경우에만)
     if 'search_query' in st.session_state:
         st.session_state.search_query = ""
-    if 'review_start_date' in st.session_state:
-        st.session_state.review_start_date = None
-    if 'review_end_date' in st.session_state:
-        st.session_state.review_end_date = None
     
-    st.session_state.language_filter = ["all"]
+    # 메인 브랜드 및 제품 초기화
+    if 'main_brand' in st.session_state:
+        st.session_state.main_brand = ""
+    if 'main_product' in st.session_state:
+        st.session_state.main_product = None
+    if 'main_product_label' in st.session_state:
+        st.session_state.main_product_label = ""
+    if 'compare_products' in st.session_state:
+        st.session_state.compare_products = []
+    if 'compare_products_labels' in st.session_state:
+        st.session_state.compare_products_labels = []
 
 try:
     from visualizations import (
@@ -700,14 +702,8 @@ def main():
     categories = get_cached_categories() or []
     brands = sorted(list(set(p.get("brand", "") for p in all_products_list if p.get("brand") and p.get("brand")))) if all_products_list else []
     
-    # ========== 사이드바: 개선된 탭 구조 ==========
+    # ========== 사이드바: 수직 정렬 구조 ==========
     with st.sidebar:
-        # Supabase 연결 상태
-        if USE_SUPABASE:
-            st.success("✅ Supabase 연동 활성화")
-        else:
-            st.warning("⚠️ 목업 데이터 사용 중")
-        
         # 필터 히스토리 되돌리기 버튼 (상단에 배치)
         if 'filter_history' in st.session_state and len(st.session_state.filter_history) > 0:
             if st.button("↩️ 이전 필터로 되돌리기", use_container_width=True, type="secondary"):
@@ -716,8 +712,12 @@ def main():
                     # 필터 상태 복원
                     if 'category_filter' in previous_state:
                         st.session_state.category_filter = previous_state['category_filter']
-                    if 'brand_filter' in previous_state:
-                        st.session_state.brand_filter = previous_state['brand_filter']
+                    if 'main_brand' in previous_state:
+                        st.session_state.main_brand = previous_state['main_brand']
+                    if 'main_product' in previous_state:
+                        st.session_state.main_product = previous_state['main_product']
+                    if 'compare_products' in previous_state:
+                        st.session_state.compare_products = previous_state['compare_products']
                     if 'price_range' in previous_state:
                         st.session_state.price_range = previous_state['price_range']
                     if 'rating_range' in previous_state:
@@ -728,280 +728,267 @@ def main():
                         st.session_state.trust_filter = previous_state['trust_filter']
                     if 'search_query' in previous_state:
                         st.session_state.search_query = previous_state['search_query']
-                    if 'review_start_date' in previous_state:
-                        st.session_state.review_start_date = previous_state['review_start_date']
-                    if 'review_end_date' in previous_state:
-                        st.session_state.review_end_date = previous_state['review_end_date']
-                    if 'language_filter' in previous_state:
-                        st.session_state.language_filter = previous_state['language_filter']
                     st.rerun()
         
-        # 사이드바 탭 (4개로 확장)
-        sidebar_tab1, sidebar_tab2, sidebar_tab3, sidebar_tab4 = st.tabs([
-            "🔍 제품 선택", 
-            "⚙️ Supabase 필터", 
-            "📊 실시간 통계",
-            "ℹ️ 안내"
-        ])
+        st.markdown("---")
+        st.markdown("### 🔍 제품 선택")
         
-        # 탭 1: 제품 선택
-        with sidebar_tab1:
-            st.header("🔍 제품 선택")
-            selected_labels = st.multiselect(
-                "분석할 제품을 선택하세요",
-                options=list(product_options.keys()),
-                default=list(product_options.keys())[:3],
-                key="product_select"
+        # 1단계: 카테고리 선택
+        if categories:
+            category_filter = st.multiselect(
+                "📂 카테고리 선택",
+                options=categories,
+                default=st.session_state.get('category_filter', categories),
+                key="category_filter"
             )
-            
-            st.markdown("---")
-            st.markdown("### 💡 빠른 선택")
-            col_q1, col_q2 = st.columns(2)
-            with col_q1:
-                if st.button("상위 3개", use_container_width=True):
-                    selected_labels = list(product_options.keys())[:3]
-                    st.rerun()
-            with col_q2:
-                if st.button("전체 선택", use_container_width=True):
-                    selected_labels = list(product_options.keys())
-                    st.rerun()
+        else:
+            category_filter = []
         
-        # 탭 2: Supabase 고급 필터 (다양한 DB 필드 활용)
-        with sidebar_tab2:
-            st.header("⚙️ Supabase 필터")
-            
-            # 카테고리 필터 (Supabase category 필드 활용)
-            if categories:
-                category_filter = st.multiselect(
-                    "📂 카테고리",
-                    options=categories,
-                    default=categories,
-                    key="category_filter"
+        # 카테고리 필터링된 제품 목록
+        filtered_products_by_category = all_products_list
+        if category_filter:
+            filtered_products_by_category = [p for p in all_products_list if p.get("category") in category_filter]
+        
+        # 카테고리 필터링된 브랜드 목록
+        filtered_brands = sorted(list(set(p.get("brand", "") for p in filtered_products_by_category if p.get("brand") and p.get("brand"))))
+        
+        # 2단계: 브랜드 1개(메인) 선택
+        if filtered_brands:
+            main_brand = st.selectbox(
+                "🏷️ 메인 브랜드 선택 (1개)",
+                options=[""] + filtered_brands,
+                index=0 if not st.session_state.get('main_brand') else (filtered_brands.index(st.session_state.get('main_brand')) + 1 if st.session_state.get('main_brand') in filtered_brands else 0),
+                key="main_brand"
+            )
+        else:
+            main_brand = ""
+        
+        # 브랜드 필터링된 제품 목록
+        filtered_products_by_brand = filtered_products_by_category
+        if main_brand:
+            filtered_products_by_brand = [p for p in filtered_products_by_category if p.get("brand") == main_brand]
+        
+        # 제품 옵션 생성 (브랜드 + 제품명)
+        product_options_filtered = {f"{p.get('brand', '')} {p.get('name', '')}": p.get('id') for p in filtered_products_by_brand}
+        
+        # 3단계: 제품 1개(메인) 선택
+        if product_options_filtered:
+            main_product_label = st.selectbox(
+                "📦 메인 제품 선택 (1개)",
+                options=[""] + list(product_options_filtered.keys()),
+                index=0 if not st.session_state.get('main_product') else (list(product_options_filtered.keys()).index(st.session_state.get('main_product_label', "")) + 1 if st.session_state.get('main_product_label') in product_options_filtered.keys() else 0),
+                key="main_product_select"
+            )
+            main_product = product_options_filtered.get(main_product_label) if main_product_label else None
+            st.session_state.main_product = main_product
+            st.session_state.main_product_label = main_product_label
+        else:
+            main_product = None
+            main_product_label = ""
+        
+        # 비교 제품 목록 (메인 제품 제외)
+        compare_options = {k: v for k, v in product_options_filtered.items() if v != main_product}
+        
+        # 4단계: 비교 제품 선택 (최대 2개)
+        if compare_options:
+            compare_products_labels = st.multiselect(
+                "🔄 비교 제품 선택 (최대 2개)",
+                options=list(compare_options.keys()),
+                default=st.session_state.get('compare_products_labels', []),
+                max_selections=2,
+                key="compare_products_select"
+            )
+            compare_products = [compare_options[label] for label in compare_products_labels]
+            st.session_state.compare_products = compare_products
+            st.session_state.compare_products_labels = compare_products_labels
+        else:
+            compare_products = []
+        
+        st.markdown("---")
+        st.markdown("### ⚙️ 필터 설정")
+        
+        # 가격 범위 필터 (기존 범위로 초기화)
+        if all_products_list:
+            prices = [p.get("price", 0) for p in all_products_list if p.get("price") and p.get("price") > 0]
+            if prices:
+                min_price = min(prices)
+                max_price = max(prices)
+                # 초기화 시 기존 범위로 복원
+                if 'price_range' not in st.session_state:
+                    st.session_state.price_range = (float(min_price), float(max_price))
+                price_range = st.slider(
+                    "💰 가격 범위 ($)",
+                    min_value=float(min_price),
+                    max_value=float(max_price),
+                    value=st.session_state.get('price_range', (float(min_price), float(max_price))),
+                    key="price_range"
                 )
-            else:
-                category_filter = []
-            
-            # 브랜드 필터 (전역 brands 변수 사용, 없으면 재계산)
-            if not brands and all_products_list:
-                brands = sorted(list(set(p.get("brand", "") for p in all_products_list if p.get("brand") and p.get("brand"))))
-            if brands:
-                brand_filter = st.multiselect(
-                    "🏷️ 브랜드",
-                    options=brands,
-                    default=brands,
-                    key="brand_filter"
+        
+        # 평점 범위 필터 (기존 범위로 초기화)
+        if all_products_list:
+            ratings = [p.get("rating_avg", 0) for p in all_products_list if p.get("rating_avg") and p.get("rating_avg") > 0]
+            if ratings:
+                min_rating = min(ratings)
+                max_rating = max(ratings)
+                # 초기화 시 기존 범위로 복원
+                if 'rating_range' not in st.session_state:
+                    st.session_state.rating_range = (float(min_rating), float(max_rating))
+                rating_range = st.slider(
+                    "⭐ 평점 범위",
+                    min_value=float(min_rating),
+                    max_value=float(max_rating),
+                    value=st.session_state.get('rating_range', (float(min_rating), float(max_rating))),
+                    step=0.1,
+                    key="rating_range"
                 )
-            else:
-                brand_filter = []
-            
-            # 가격 범위 필터
-            if all_products_list:
-                prices = [p.get("price", 0) for p in all_products_list if p.get("price") and p.get("price") > 0]
-                if prices:
-                    min_price = min(prices)
-                    max_price = max(prices)
-                    price_range = st.slider(
-                        "💰 가격 범위 ($)",
-                        min_value=float(min_price),
-                        max_value=float(max_price),
-                        value=(float(min_price), float(max_price)),
-                        key="price_range"
-                    )
-            
-            # 평점 범위 필터 (Supabase rating_avg 필드 활용)
-            if all_products_list:
-                ratings = [p.get("rating_avg", 0) for p in all_products_list if p.get("rating_avg") and p.get("rating_avg") > 0]
-                if ratings:
-                    min_rating = min(ratings)
-                    max_rating = max(ratings)
-                    rating_range = st.slider(
-                        "⭐ 평점 범위",
-                        min_value=float(min_rating),
-                        max_value=float(max_rating),
-                        value=(float(min_rating), float(max_rating)),
-                        step=0.1,
-                        key="rating_range"
-                    )
-            
-            # 리뷰 수 필터 (Supabase rating_count 필드 활용)
-            if all_products_list:
-                review_counts = [p.get("rating_count", 0) for p in all_products_list if p.get("rating_count")]
-                if review_counts:
-                    min_reviews = min(review_counts)
-                    max_reviews = max(review_counts)
-                    review_count_range = st.slider(
-                        "💬 리뷰 수 범위",
-                        min_value=int(min_reviews),
-                        max_value=int(max_reviews),
-                        value=(int(min_reviews), int(max_reviews)),
-                        key="review_count_range"
-                    )
-            
-            # 신뢰도 필터
-            trust_filter = st.multiselect(
-                "🎯 신뢰도 등급",
-                options=["HIGH", "MEDIUM", "LOW"],
-                default=["HIGH", "MEDIUM", "LOW"],
-                key="trust_filter"
-            )
-            
-            # 검색 기능
-            search_query = st.text_input(
-                "🔎 제품명/브랜드 검색",
-                placeholder="예: NOW Foods, Lutein...",
-                key="search_query"
-            )
-            
-            st.markdown("---")
-            st.markdown("### 📅 리뷰 날짜 필터")
-            col_date1, col_date2 = st.columns(2)
-            with col_date1:
-                start_date = st.date_input("시작일", value=None, key="review_start_date")
-            with col_date2:
-                end_date = st.date_input("종료일", value=None, key="review_end_date")
-            
-            # 언어 필터 (Supabase language 필드 활용)
-            language_filter = st.multiselect(
-                "🌐 리뷰 언어",
-                options=["ko", "en", "all"],
-                default=["all"],
-                key="language_filter"
-            )
-            
-            st.markdown("---")
-            
-            # 필터 관리 버튼
-            col_reset, col_save = st.columns(2)
-            with col_reset:
-                if st.button("🔄 초기화", use_container_width=True, type="secondary", key="reset_filters"):
-                    # 안전한 초기화: None 체크 후 전달
-                    safe_categories = categories if (categories is not None and isinstance(categories, list)) else []
-                    safe_brands = brands if (brands is not None and isinstance(brands, list)) else []
-                    safe_products = all_products_list if (all_products_list is not None and isinstance(all_products_list, list)) else []
-                    reset_all_filters(safe_products, safe_categories, safe_brands)
-                    st.rerun()
-            with col_save:
-                if st.button("💾 저장", use_container_width=True, type="secondary", key="save_filters"):
-                    current_filters = {
-                        'category_filter': st.session_state.get('category_filter', []),
-                        'brand_filter': st.session_state.get('brand_filter', []),
-                        'price_range': st.session_state.get('price_range', None),
-                        'rating_range': st.session_state.get('rating_range', None),
-                        'review_count_range': st.session_state.get('review_count_range', None),
-                        'trust_filter': st.session_state.get('trust_filter', []),
-                        'search_query': st.session_state.get('search_query', ''),
-                        'review_start_date': st.session_state.get('review_start_date', None),
-                        'review_end_date': st.session_state.get('review_end_date', None),
-                        'language_filter': st.session_state.get('language_filter', ['all'])
-                    }
-                    save_filter_state_to_history(current_filters)
-                    st.success("저장 완료!")
         
-        # 탭 3: 실시간 통계 (Supabase 데이터 기반)
-        with sidebar_tab3:
-            st.header("📊 실시간 통계")
-            
-            try:
-                stats = get_cached_statistics()
-                
-                # 전체 통계
-                st.metric("전체 제품 수", f"{stats.get('total_products', 0)}개")
-                st.metric("전체 리뷰 수", f"{stats.get('total_reviews', 0)}개")
-                st.metric("평균 가격", f"${stats.get('avg_price', 0):.2f}")
-                
-                st.markdown("---")
-                
-                # 브랜드별 통계
-                st.markdown("### 🏷️ 브랜드별 통계")
-                brand_stats = stats.get('brands', {})
-                if brand_stats:
-                    for brand, data in sorted(brand_stats.items(), key=lambda x: x[1]['count'], reverse=True)[:5]:
-                        avg_rating = data['total_rating'] / data['count'] if data['count'] > 0 else 0
-                        st.markdown(f"**{brand}**")
-                        st.caption(f"제품: {data['count']}개 | 평균 평점: {avg_rating:.1f} | 리뷰: {data['total_reviews']}개")
-                
-                st.markdown("---")
-                
-                # 카테고리별 통계
-                st.markdown("### 📂 카테고리별 통계")
-                category_stats = stats.get('categories', {})
-                if category_stats:
-                    for category, data in sorted(category_stats.items(), key=lambda x: x[1]['count'], reverse=True)[:5]:
-                        st.markdown(f"**{category}**")
-                        st.caption(f"제품: {data['count']}개")
-                
-                st.markdown("---")
-                
-                # 평점 분포
-                st.markdown("### ⭐ 평점 분포")
-                rating_dist = stats.get('rating_distribution', {})
-                if rating_dist:
-                    total_ratings = sum(rating_dist.values())
-                    for rating in [5, 4, 3, 2, 1]:
-                        count = rating_dist.get(rating, 0)
-                        percentage = (count / total_ratings * 100) if total_ratings > 0 else 0
-                        st.progress(percentage / 100, text=f"{rating}점: {count}개 ({percentage:.1f}%)")
-                
-            except Exception as e:
-                st.error(f"통계 로드 실패: {e}")
-                # Fallback: 기존 방식
-                total_products = len(all_data)
-                total_reviews = sum(len(data.get("reviews", [])) for data in all_data.values())
-                avg_trust = sum(data.get("ai_result", {}).get("trust_score", 0) for data in all_data.values()) / total_products if total_products > 0 else 0
-                
-                st.metric("전체 제품 수", f"{total_products}개")
-                st.metric("전체 리뷰 수", f"{total_reviews}개")
-                st.metric("평균 신뢰도", f"{avg_trust:.1f}점")
+        # 리뷰 수 필터 (기존 범위로 초기화)
+        if all_products_list:
+            review_counts = [p.get("rating_count", 0) for p in all_products_list if p.get("rating_count")]
+            if review_counts:
+                min_reviews = min(review_counts)
+                max_reviews = max(review_counts)
+                # 초기화 시 기존 범위로 복원
+                if 'review_count_range' not in st.session_state:
+                    st.session_state.review_count_range = (int(min_reviews), int(max_reviews))
+                review_count_range = st.slider(
+                    "💬 리뷰 수 범위",
+                    min_value=int(min_reviews),
+                    max_value=int(max_reviews),
+                    value=st.session_state.get('review_count_range', (int(min_reviews), int(max_reviews))),
+                    key="review_count_range"
+                )
         
-        # 탭 4: 안내
-        with sidebar_tab4:
-            st.header("ℹ️ 안내")
+        # 신뢰도 필터
+        trust_filter = st.multiselect(
+            "🎯 신뢰도 등급",
+            options=["HIGH", "MEDIUM", "LOW"],
+            default=st.session_state.get('trust_filter', ["HIGH", "MEDIUM", "LOW"]),
+            key="trust_filter"
+        )
+        
+        # 검색 기능
+        search_query = st.text_input(
+            "🔎 제품명/브랜드 검색",
+            placeholder="예: NOW Foods, Lutein...",
+            value=st.session_state.get('search_query', ''),
+            key="search_query"
+        )
+        
+        st.markdown("---")
+        
+        # 필터 관리 버튼
+        col_reset, col_save = st.columns(2)
+        with col_reset:
+            if st.button("🔄 초기화", use_container_width=True, type="secondary", key="reset_filters"):
+                # 안전한 초기화: None 체크 후 전달
+                safe_categories = categories if (categories is not None and isinstance(categories, list)) else []
+                safe_brands = brands if (brands is not None and isinstance(brands, list)) else []
+                safe_products = all_products_list if (all_products_list is not None and isinstance(all_products_list, list)) else []
+                reset_all_filters(safe_products, safe_categories, safe_brands)
+                st.rerun()
+        with col_save:
+            if st.button("💾 저장", use_container_width=True, type="secondary", key="save_filters"):
+                current_filters = {
+                    'category_filter': st.session_state.get('category_filter', []),
+                    'main_brand': st.session_state.get('main_brand', ''),
+                    'main_product': st.session_state.get('main_product', None),
+                    'compare_products': st.session_state.get('compare_products', []),
+                    'price_range': st.session_state.get('price_range', None),
+                    'rating_range': st.session_state.get('rating_range', None),
+                    'review_count_range': st.session_state.get('review_count_range', None),
+                    'trust_filter': st.session_state.get('trust_filter', []),
+                    'search_query': st.session_state.get('search_query', '')
+                }
+                save_filter_state_to_history(current_filters)
+                st.success("저장 완료!")
+        
+        st.markdown("---")
+        st.markdown("### 📊 실시간 통계")
+        
+        # 실시간 통계 (Supabase 데이터 기반)
+        try:
+            stats = get_cached_statistics()
             
-            st.markdown("### 🎯 신뢰도 등급")
-            st.markdown("""
-            - **HIGH (70점 이상)**: 신뢰할 수 있는 제품
-            - **MEDIUM (50-70점)**: 보통 수준
-            - **LOW (50점 미만)**: 주의 필요
-            """)
+            # 전체 통계
+            st.metric("전체 제품 수", f"{stats.get('total_products', 0)}개")
+            st.metric("전체 리뷰 수", f"{stats.get('total_reviews', 0)}개")
+            st.metric("평균 가격", f"${stats.get('avg_price', 0):.2f}")
             
             st.markdown("---")
-            st.markdown("### 📊 분석 기준")
-            st.markdown("""
-            1. 인증 구매 비율
-            2. 재구매율
-            3. 장기 사용 비율
-            4. 평점 분포 적절성
-            5. 리뷰 길이
-            6. 시간 분포 자연성
-            7. 광고성 리뷰 탐지
-            8. 리뷰어 다양성
-            """)
+            
+            # 브랜드별 통계
+            st.markdown("### 🏷️ 브랜드별 통계")
+            brand_stats = stats.get('brands', {})
+            if brand_stats:
+                for brand, data in sorted(brand_stats.items(), key=lambda x: x[1]['count'], reverse=True)[:5]:
+                    avg_rating = data['total_rating'] / data['count'] if data['count'] > 0 else 0
+                    st.markdown(f"**{brand}**")
+                    st.caption(f"제품: {data['count']}개 | 평균 평점: {avg_rating:.1f} | 리뷰: {data['total_reviews']}개")
             
             st.markdown("---")
-            st.markdown("### 💡 사용 팁")
-            st.markdown("""
-            - **Supabase 필터** 탭에서 다양한 조건으로 제품을 필터링할 수 있습니다
-            - **실시간 통계** 탭에서 데이터베이스의 최신 통계를 확인하세요
-            - 필터를 조합하여 원하는 제품만 선택할 수 있습니다
-            """)
+            
+            # 카테고리별 통계
+            st.markdown("### 📂 카테고리별 통계")
+            category_stats = stats.get('categories', {})
+            if category_stats:
+                for category, data in sorted(category_stats.items(), key=lambda x: x[1]['count'], reverse=True)[:5]:
+                    st.markdown(f"**{category}**")
+                    st.caption(f"제품: {data['count']}개")
+            
+            st.markdown("---")
+            
+            # 평점 분포
+            st.markdown("### ⭐ 평점 분포")
+            rating_dist = stats.get('rating_distribution', {})
+            if rating_dist:
+                total_ratings = sum(rating_dist.values())
+                for rating in [5, 4, 3, 2, 1]:
+                    count = rating_dist.get(rating, 0)
+                    percentage = (count / total_ratings * 100) if total_ratings > 0 else 0
+                    st.progress(percentage / 100, text=f"{rating}점: {count}개 ({percentage:.1f}%)")
+            
+        except Exception as e:
+            st.error(f"통계 로드 실패: {e}")
+            # Fallback: 기존 방식
+            total_products = len(all_data)
+            total_reviews = sum(len(data.get("reviews", [])) for data in all_data.values())
+            avg_trust = sum(data.get("ai_result", {}).get("trust_score", 0) for data in all_data.values()) / total_products if total_products > 0 else 0
+            
+            st.metric("전체 제품 수", f"{total_products}개")
+            st.metric("전체 리뷰 수", f"{total_reviews}개")
+            st.metric("평균 신뢰도", f"{avg_trust:.1f}점")
     
-    # 제품 선택 검증
-    if not selected_labels:
-        st.warning("분석할 제품을 하나 이상 선택해주세요.")
+    # 제품 선택 검증 (새로운 구조)
+    main_product = st.session_state.get('main_product')
+    compare_products = st.session_state.get('compare_products', [])
+    
+    if not main_product:
+        st.warning("메인 제품을 선택해주세요.")
         return
     
-    # 필터 값 수집 및 검증
+    # 선택된 제품 목록 구성 (메인 + 비교 제품)
+    selected_product_ids = [main_product] + compare_products
+    selected_labels = []
+    for product_id in selected_product_ids:
+        for label, pid in product_options.items():
+            if pid == product_id:
+                selected_labels.append(label)
+                break
+    
+    if not selected_labels:
+        st.warning("선택된 제품을 찾을 수 없습니다.")
+        return
+    
+    # 필터 값 수집 및 검증 (리뷰날짜, 언어 필터 제거)
     filters_dict = {
         'category_filter': st.session_state.get('category_filter', []),
-        'brand_filter': st.session_state.get('brand_filter', []),
+        'main_brand': st.session_state.get('main_brand', ''),
         'price_range': st.session_state.get('price_range', None),
         'rating_range': st.session_state.get('rating_range', None),
         'review_count_range': st.session_state.get('review_count_range', None),
         'trust_filter': st.session_state.get('trust_filter', []),
-        'search_query': st.session_state.get('search_query', ''),
-        'start_date': st.session_state.get('review_start_date', None),
-        'end_date': st.session_state.get('review_end_date', None),
-        'language_filter': st.session_state.get('language_filter', ['all'])
+        'search_query': st.session_state.get('search_query', '')
     }
     
     # 필터 검증
@@ -1032,12 +1019,12 @@ def main():
                 if d.get("product", {}).get("category", "") in category_filter
             ]
         
-        # 브랜드 필터 적용
-        brand_filter = filters_dict.get('brand_filter', [])
-        if brand_filter:
+        # 브랜드 필터 적용 (메인 브랜드만)
+        main_brand = filters_dict.get('main_brand', '')
+        if main_brand:
             selected_data = [
                 d for d in selected_data
-                if d.get("product", {}).get("brand", "") in brand_filter
+                if d.get("product", {}).get("brand", "") == main_brand
             ]
         
         # 가격 필터 적용
@@ -1082,57 +1069,7 @@ def main():
                 if d.get("product", {}).get("id") in search_ids
             ]
         
-        # 날짜 필터 적용 (리뷰 날짜 기준)
-        start_date = filters_dict.get('start_date')
-        end_date = filters_dict.get('end_date')
-        if start_date and end_date:
-            filtered_reviews_data = []
-            for d in selected_data:
-                reviews = d.get("reviews", [])
-                filtered_reviews = []
-                for r in reviews:
-                    review_date_str = r.get("date")
-                    if review_date_str:
-                        try:
-                            # 날짜 문자열을 date 객체로 변환
-                            if isinstance(review_date_str, str):
-                                review_date = datetime.strptime(review_date_str, "%Y-%m-%d").date()
-                            else:
-                                review_date = review_date_str
-                            
-                            # 날짜 범위 확인
-                            if start_date <= review_date <= end_date:
-                                filtered_reviews.append(r)
-                        except:
-                            # 날짜 파싱 실패 시 포함
-                            filtered_reviews.append(r)
-                    else:
-                        # 날짜가 없으면 포함
-                        filtered_reviews.append(r)
-                
-                if filtered_reviews or len(reviews) == 0:
-                    d_copy = d.copy()
-                    d_copy["reviews"] = filtered_reviews if filtered_reviews else reviews
-                    filtered_reviews_data.append(d_copy)
-            if filtered_reviews_data:
-                selected_data = filtered_reviews_data
-        
-        # 언어 필터 적용 (Supabase language 필드)
-        language_filter = filters_dict.get('language_filter', ['all'])
-        if language_filter and "all" not in language_filter:
-            filtered_lang_data = []
-            for d in selected_data:
-                reviews = d.get("reviews", [])
-                filtered_reviews = [
-                    r for r in reviews
-                    if r.get("language", "ko") in language_filter
-                ]
-                if filtered_reviews:
-                    d_copy = d.copy()
-                    d_copy["reviews"] = filtered_reviews
-                    filtered_lang_data.append(d_copy)
-            if filtered_lang_data:
-                selected_data = filtered_lang_data
+        # 날짜 필터 및 언어 필터 제거됨 (사용자 요청)
     
     # 필터 적용 결과 피드백
     if not selected_data:
