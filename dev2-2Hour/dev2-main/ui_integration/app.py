@@ -206,6 +206,14 @@ def reset_all_filters(all_products_list: List[Dict], categories: Optional[List[s
         st.session_state.compare_products = []
     if 'compare_products_labels' in st.session_state:
         st.session_state.compare_products_labels = []
+    
+    # 등급 필터 초기화 (별 5등급으로 초기화)
+    if 'price_grade' in st.session_state:
+        st.session_state.price_grade = 5
+    if 'rating_grade' in st.session_state:
+        st.session_state.rating_grade = 5
+    if 'review_grade' in st.session_state:
+        st.session_state.review_grade = 5
 
 try:
     from visualizations import (
@@ -699,12 +707,26 @@ def main():
     
     # 캐싱된 제품 목록 및 카테고리 가져오기 (성능 최적화)
     all_products_list = get_cached_products() or []
-    categories = get_cached_categories() or []
+    categories_raw = get_cached_categories() or []
+    # "카테고리"가 포함된 한국어 카테고리 제거
+    categories = [c for c in categories_raw if "카테고리" not in c]
     brands = sorted(list(set(p.get("brand", "") for p in all_products_list if p.get("brand") and p.get("brand")))) if all_products_list else []
     
     # ========== 사이드바: 수직 정렬 구조 ==========
     with st.sidebar:
-        # 필터 히스토리 되돌리기 버튼 (상단에 배치)
+        # 제품검색 필터 (최상단 배치)
+        st.markdown("### 🔎 제품 검색")
+        search_query = st.text_input(
+            "제품명/브랜드 검색",
+            placeholder="예: NOW Foods, Lutein...",
+            value=st.session_state.get('search_query', ''),
+            key="search_query",
+            label_visibility="collapsed"
+        )
+        
+        st.markdown("---")
+        
+        # 필터 히스토리 되돌리기 버튼
         if 'filter_history' in st.session_state and len(st.session_state.filter_history) > 0:
             if st.button("↩️ 이전 필터로 되돌리기", use_container_width=True, type="secondary"):
                 previous_state = restore_filter_state_from_history()
@@ -728,6 +750,12 @@ def main():
                         st.session_state.trust_filter = previous_state['trust_filter']
                     if 'search_query' in previous_state:
                         st.session_state.search_query = previous_state['search_query']
+                    if 'price_grade' in previous_state:
+                        st.session_state.price_grade = previous_state['price_grade']
+                    if 'rating_grade' in previous_state:
+                        st.session_state.rating_grade = previous_state['rating_grade']
+                    if 'review_grade' in previous_state:
+                        st.session_state.review_grade = previous_state['review_grade']
                     st.rerun()
         
         st.markdown("---")
@@ -807,57 +835,110 @@ def main():
         st.markdown("---")
         st.markdown("### ⚙️ 필터 설정")
         
-        # 가격 범위 필터 (기존 범위로 초기화)
+        # 가격 범위 필터 (별 1~5 등급으로 재설정)
         if all_products_list:
             prices = [p.get("price", 0) for p in all_products_list if p.get("price") and p.get("price") > 0]
             if prices:
-                min_price = min(prices)
-                max_price = max(prices)
-                # 초기화 시 기존 범위로 복원
-                if 'price_range' not in st.session_state:
-                    st.session_state.price_range = (float(min_price), float(max_price))
-                price_range = st.slider(
-                    "💰 가격 범위 ($)",
-                    min_value=float(min_price),
-                    max_value=float(max_price),
-                    value=st.session_state.get('price_range', (float(min_price), float(max_price))),
-                    key="price_range"
+                prices_sorted = sorted(prices)
+                # 데이터를 5등급으로 분할
+                n = len(prices_sorted)
+                price_grade_1 = prices_sorted[0]  # 최소값
+                price_grade_2 = prices_sorted[n // 5] if n >= 5 else prices_sorted[n // 2]
+                price_grade_3 = prices_sorted[n * 2 // 5] if n >= 5 else prices_sorted[n * 2 // 3]
+                price_grade_4 = prices_sorted[n * 4 // 5] if n >= 5 else prices_sorted[n - 1]
+                price_grade_5 = prices_sorted[-1]  # 최대값
+                
+                # 별 1~5 등급 선택
+                price_grade = st.select_slider(
+                    "💰 가격 등급",
+                    options=[1, 2, 3, 4, 5],
+                    value=st.session_state.get('price_grade', 5),
+                    format_func=lambda x: f"⭐{x}등급",
+                    key="price_grade"
                 )
+                # 등급에 따른 실제 가격 범위 계산
+                if price_grade == 1:
+                    price_range = (float(price_grade_1), float(price_grade_2))
+                elif price_grade == 2:
+                    price_range = (float(price_grade_1), float(price_grade_3))
+                elif price_grade == 3:
+                    price_range = (float(price_grade_1), float(price_grade_4))
+                elif price_grade == 4:
+                    price_range = (float(price_grade_1), float(price_grade_5))
+                else:  # 5
+                    price_range = (float(price_grade_1), float(price_grade_5))
+                st.session_state.price_range = price_range
+                st.caption(f"가격 범위: ${price_range[0]:.2f} ~ ${price_range[1]:.2f}")
         
-        # 평점 범위 필터 (기존 범위로 초기화)
+        # 평점 범위 필터 (별 1~5 등급으로 재설정)
         if all_products_list:
             ratings = [p.get("rating_avg", 0) for p in all_products_list if p.get("rating_avg") and p.get("rating_avg") > 0]
             if ratings:
-                min_rating = min(ratings)
-                max_rating = max(ratings)
-                # 초기화 시 기존 범위로 복원
-                if 'rating_range' not in st.session_state:
-                    st.session_state.rating_range = (float(min_rating), float(max_rating))
-                rating_range = st.slider(
-                    "⭐ 평점 범위",
-                    min_value=float(min_rating),
-                    max_value=float(max_rating),
-                    value=st.session_state.get('rating_range', (float(min_rating), float(max_rating))),
-                    step=0.1,
-                    key="rating_range"
+                ratings_sorted = sorted(ratings)
+                # 데이터를 5등급으로 분할
+                n = len(ratings_sorted)
+                rating_grade_1 = ratings_sorted[0]  # 최소값
+                rating_grade_2 = ratings_sorted[n // 5] if n >= 5 else ratings_sorted[n // 2]
+                rating_grade_3 = ratings_sorted[n * 2 // 5] if n >= 5 else ratings_sorted[n * 2 // 3]
+                rating_grade_4 = ratings_sorted[n * 4 // 5] if n >= 5 else ratings_sorted[n - 1]
+                rating_grade_5 = ratings_sorted[-1]  # 최대값
+                
+                # 별 1~5 등급 선택
+                rating_grade = st.select_slider(
+                    "⭐ 평점 등급",
+                    options=[1, 2, 3, 4, 5],
+                    value=st.session_state.get('rating_grade', 5),
+                    format_func=lambda x: f"⭐{x}등급",
+                    key="rating_grade"
                 )
+                # 등급에 따른 실제 평점 범위 계산
+                if rating_grade == 1:
+                    rating_range = (float(rating_grade_1), float(rating_grade_2))
+                elif rating_grade == 2:
+                    rating_range = (float(rating_grade_1), float(rating_grade_3))
+                elif rating_grade == 3:
+                    rating_range = (float(rating_grade_1), float(rating_grade_4))
+                elif rating_grade == 4:
+                    rating_range = (float(rating_grade_1), float(rating_grade_5))
+                else:  # 5
+                    rating_range = (float(rating_grade_1), float(rating_grade_5))
+                st.session_state.rating_range = rating_range
+                st.caption(f"평점 범위: {rating_range[0]:.1f} ~ {rating_range[1]:.1f}점")
         
-        # 리뷰 수 필터 (기존 범위로 초기화)
+        # 리뷰 수 필터 (별 1~5 등급으로 재설정)
         if all_products_list:
             review_counts = [p.get("rating_count", 0) for p in all_products_list if p.get("rating_count")]
             if review_counts:
-                min_reviews = min(review_counts)
-                max_reviews = max(review_counts)
-                # 초기화 시 기존 범위로 복원
-                if 'review_count_range' not in st.session_state:
-                    st.session_state.review_count_range = (int(min_reviews), int(max_reviews))
-                review_count_range = st.slider(
-                    "💬 리뷰 수 범위",
-                    min_value=int(min_reviews),
-                    max_value=int(max_reviews),
-                    value=st.session_state.get('review_count_range', (int(min_reviews), int(max_reviews))),
-                    key="review_count_range"
+                reviews_sorted = sorted(review_counts)
+                # 데이터를 5등급으로 분할
+                n = len(reviews_sorted)
+                review_grade_1 = reviews_sorted[0]  # 최소값
+                review_grade_2 = reviews_sorted[n // 5] if n >= 5 else reviews_sorted[n // 2]
+                review_grade_3 = reviews_sorted[n * 2 // 5] if n >= 5 else reviews_sorted[n * 2 // 3]
+                review_grade_4 = reviews_sorted[n * 4 // 5] if n >= 5 else reviews_sorted[n - 1]
+                review_grade_5 = reviews_sorted[-1]  # 최대값
+                
+                # 별 1~5 등급 선택
+                review_grade = st.select_slider(
+                    "💬 리뷰 수 등급",
+                    options=[1, 2, 3, 4, 5],
+                    value=st.session_state.get('review_grade', 5),
+                    format_func=lambda x: f"⭐{x}등급",
+                    key="review_grade"
                 )
+                # 등급에 따른 실제 리뷰 수 범위 계산
+                if review_grade == 1:
+                    review_count_range = (int(review_grade_1), int(review_grade_2))
+                elif review_grade == 2:
+                    review_count_range = (int(review_grade_1), int(review_grade_3))
+                elif review_grade == 3:
+                    review_count_range = (int(review_grade_1), int(review_grade_4))
+                elif review_grade == 4:
+                    review_count_range = (int(review_grade_1), int(review_grade_5))
+                else:  # 5
+                    review_count_range = (int(review_grade_1), int(review_grade_5))
+                st.session_state.review_count_range = review_count_range
+                st.caption(f"리뷰 수 범위: {review_count_range[0]} ~ {review_count_range[1]}개")
         
         # 신뢰도 필터
         trust_filter = st.multiselect(
@@ -865,14 +946,6 @@ def main():
             options=["HIGH", "MEDIUM", "LOW"],
             default=st.session_state.get('trust_filter', ["HIGH", "MEDIUM", "LOW"]),
             key="trust_filter"
-        )
-        
-        # 검색 기능
-        search_query = st.text_input(
-            "🔎 제품명/브랜드 검색",
-            placeholder="예: NOW Foods, Lutein...",
-            value=st.session_state.get('search_query', ''),
-            key="search_query"
         )
         
         st.markdown("---")
@@ -895,8 +968,11 @@ def main():
                     'main_product': st.session_state.get('main_product', None),
                     'compare_products': st.session_state.get('compare_products', []),
                     'price_range': st.session_state.get('price_range', None),
+                    'price_grade': st.session_state.get('price_grade', 5),
                     'rating_range': st.session_state.get('rating_range', None),
+                    'rating_grade': st.session_state.get('rating_grade', 5),
                     'review_count_range': st.session_state.get('review_count_range', None),
+                    'review_grade': st.session_state.get('review_grade', 5),
                     'trust_filter': st.session_state.get('trust_filter', []),
                     'search_query': st.session_state.get('search_query', '')
                 }
