@@ -216,7 +216,14 @@ def reset_all_filters(all_products_list: List[Dict], categories: Optional[List[s
         st.session_state.review_grade = 5
 
 try:
+    # Import class-based visualization components (logic_designer compliant)
     from visualizations import (
+        ChartRenderer,
+        ChartTheme,
+        ChecklistVisualizer,
+        ComparisonTableRenderer,
+        TrustBadgeRenderer,
+        # Convenience functions for backward compatibility
         render_gauge_chart,
         render_trust_badge,
         render_comparison_table,
@@ -225,6 +232,11 @@ try:
         render_checklist_visual,
         render_price_comparison_chart
     )
+    
+    # Initialize chart renderer with theme (logic_designer compliant)
+    chart_theme = ChartTheme()
+    chart_renderer = ChartRenderer(theme=chart_theme)
+    badge_renderer = TrustBadgeRenderer(theme=chart_theme)
 except ImportError as e:
     import traceback
     st.error(f"Visualizations import failed: {e}")
@@ -1945,7 +1957,12 @@ def main():
             st.caption("신뢰도, 재구매율, 장기사용, 평균평점, 리뷰다양성을 한눈에 비교")
             try:
                 if len(selected_data) > 0:
-                    fig_radar = render_radar_chart(selected_data)
+                    # Use class-based renderer (logic_designer compliant)
+                    try:
+                        fig_radar = chart_renderer.render_radar_chart(selected_data)
+                    except Exception as e:
+                        st.error(f"Error rendering radar chart: {e}")
+                        fig_radar = chart_renderer._empty_chart("Chart rendering failed")
                     st.plotly_chart(fig_radar, use_container_width=True, height=600)
                 else:
                     st.info("비교할 제품을 선택해주세요.")
@@ -1960,7 +1977,12 @@ def main():
             st.caption("제품별 가격과 신뢰도 점수 비교")
             try:
                 if len(selected_data) > 0:
-                    fig_price = render_price_comparison_chart(selected_data)
+                    # Use class-based renderer (logic_designer compliant)
+                    try:
+                        fig_price = chart_renderer.render_price_comparison_chart(selected_data)
+                    except Exception as e:
+                        st.error(f"Error rendering price chart: {e}")
+                        fig_price = chart_renderer._empty_chart("Chart rendering failed")
                     st.plotly_chart(fig_price, use_container_width=True, height=400)
                 else:
                     st.info("비교할 제품을 선택해주세요.")
@@ -1984,13 +2006,25 @@ def main():
             with col_card1:
                 st.markdown(f"**{product.get('brand', '')}**")
             with col_card2:
-                st.markdown(render_trust_badge(trust_level), unsafe_allow_html=True)
+                # Use class-based badge renderer (logic_designer compliant)
+                try:
+                    badge_html = badge_renderer.render(trust_level)
+                    st.markdown(badge_html, unsafe_allow_html=True)
+                except Exception:
+                    # Fallback to convenience function
+                    st.markdown(render_trust_badge(trust_level), unsafe_allow_html=True)
             st.progress(trust_score / 100, text=f"{trust_score:.1f}점")
     
     st.markdown("---")
     st.markdown("#### 📋 세부 지표 비교표")
     try:
-        comparison_df = render_comparison_table(selected_data)
+        # Use class-based table renderer (logic_designer compliant)
+        try:
+            table_renderer = ComparisonTableRenderer(selected_data)
+            comparison_df = table_renderer.render()
+        except Exception as e:
+            st.error(f"Error rendering comparison table: {e}")
+            comparison_df = pd.DataFrame()
         st.dataframe(comparison_df, use_container_width=True, hide_index=True, height=400)
     except Exception as e:
         st.error(f"비교표 생성 실패: {e}")
@@ -2043,13 +2077,34 @@ def main():
                 
                 with col_top1:
                     st.markdown("#### 🎯 신뢰도 점수")
-                    fig_gauge = render_gauge_chart(ai_result.get("trust_score", 0), "신뢰도")
+                    # Use class-based renderer (logic_designer compliant)
+                    try:
+                        fig_gauge = chart_renderer.render_gauge_chart(
+                            ai_result.get("trust_score", 0), 
+                            "Reliability Score"
+                        )
+                    except Exception as e:
+                        st.error(f"Error rendering gauge chart: {e}")
+                        fig_gauge = chart_renderer._empty_chart("Chart rendering failed")
                     st.plotly_chart(fig_gauge, use_container_width=True)
-                    st.markdown(render_trust_badge(ai_result.get("trust_level", "medium")), unsafe_allow_html=True)
+                    # Use class-based badge renderer (logic_designer compliant)
+                    try:
+                        badge_html = badge_renderer.render(ai_result.get("trust_level", "medium"))
+                        st.markdown(badge_html, unsafe_allow_html=True)
+                    except Exception:
+                        # Fallback to convenience function
+                        st.markdown(render_trust_badge(ai_result.get("trust_level", "medium")), unsafe_allow_html=True)
                 
                 with col_top2:
                     st.markdown("#### ✅ 8단계 체크리스트")
-                    render_checklist_visual(checklist)
+                    # Use class-based checklist visualizer (logic_designer compliant)
+                    try:
+                        checklist_visualizer = ChecklistVisualizer(checklist)
+                        checklist_visualizer.render()
+                    except Exception as e:
+                        st.error(f"Error rendering checklist: {e}")
+                        # Fallback to convenience function
+                        render_checklist_visual(checklist)
                 
                 with col_top3:
                     st.markdown("#### 💡 AI 약사 인사이트")
@@ -2109,7 +2164,12 @@ def main():
             col_s1, col_s2 = st.columns([1, 1])
             with col_s1:
                 st.markdown("#### 📈 리뷰 감정 분석")
-                fig_sentiment = render_review_sentiment_chart(reviews)
+                # Use class-based renderer (logic_designer compliant)
+                try:
+                    fig_sentiment = chart_renderer.render_review_sentiment_chart(reviews)
+                except Exception as e:
+                    st.error(f"Error rendering sentiment chart: {e}")
+                    fig_sentiment = chart_renderer._empty_chart("Chart rendering failed")
                 st.plotly_chart(fig_sentiment, use_container_width=True, height=400)
             
             with col_s2:
