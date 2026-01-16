@@ -496,10 +496,98 @@ st.markdown("""
   font-weight: 500;
 }
 
-/* ========== 접근성 개선 ========== */
+/* ========== 접근성 개선 (제안서 #4) ========== */
 *:focus-visible {
-  outline: 2px solid var(--primary-500);
+  outline: 3px solid var(--primary-500);
   outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* 키보드 포커스 표시 개선 */
+.stButton > button:focus,
+.stSelectbox > div > div:focus,
+.stMultiselect > div > div:focus,
+.stTextInput > div > div > input:focus,
+.stSlider > div > div:focus {
+  outline: 3px solid var(--secondary-500);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+}
+
+/* 색상 대비 개선 (WCAG 2.1 AA 준수) */
+.stSuccess {
+  background-color: #10b981;
+  color: #ffffff;
+  border-left: 4px solid #059669;
+}
+
+.stWarning {
+  background-color: #f59e0b;
+  color: #ffffff;
+  border-left: 4px solid #d97706;
+}
+
+.stError {
+  background-color: #ef4444;
+  color: #ffffff;
+  border-left: 4px solid #dc2626;
+}
+
+.stInfo {
+  background-color: #3b82f6;
+  color: #ffffff;
+  border-left: 4px solid #2563eb;
+}
+
+/* 필터 상태 카드 스타일 */
+.filter-status-card {
+  background: linear-gradient(135deg, var(--primary-50) 0%, var(--primary-100) 100%);
+  padding: 1rem;
+  border-radius: 8px;
+  border: 1px solid var(--primary-200);
+  margin-bottom: 1rem;
+}
+
+.filter-status-card h4 {
+  margin: 0 0 0.5rem 0;
+  color: var(--primary-700);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.filter-status-card .filter-item {
+  font-size: 0.75rem;
+  color: var(--gray-600);
+  margin: 0.25rem 0;
+}
+
+/* 필터 그룹 스타일 */
+.filter-group {
+  background: var(--white);
+  padding: 1.25rem;
+  border-radius: 8px;
+  border: 1px solid var(--gray-200);
+  margin-bottom: 1rem;
+  transition: box-shadow 0.2s ease;
+}
+
+.filter-group:hover {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.filter-group-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--gray-700);
+  margin-bottom: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* 로딩 스피너 스타일 */
+.stSpinner > div {
+  border-color: var(--primary-500);
 }
 </style>
 """, unsafe_allow_html=True)
@@ -760,6 +848,40 @@ def main():
         
         st.markdown("---")
         st.markdown("### 🔍 제품 선택")
+        
+        # ========== 필터 상태 표시 (제안서 #1) ==========
+        active_filters = []
+        price_range = st.session_state.get('price_range')
+        rating_range = st.session_state.get('rating_range')
+        review_count_range = st.session_state.get('review_count_range')
+        search_query = st.session_state.get('search_query', '').strip()
+        
+        if price_range:
+            active_filters.append(f"가격: ${price_range[0]:.0f}-${price_range[1]:.0f}")
+        if rating_range:
+            active_filters.append(f"평점: {rating_range[0]:.1f}-{rating_range[1]:.1f}점")
+        if review_count_range:
+            active_filters.append(f"리뷰 수: {review_count_range[0]}-{review_count_range[1]}개")
+        if search_query:
+            active_filters.append(f"검색: {search_query}")
+        
+        if active_filters:
+            st.info(f"🔍 활성 필터: {len(active_filters)}개")
+            for f in active_filters[:3]:  # 최대 3개만 표시
+                st.caption(f"  • {f}")
+            if len(active_filters) > 3:
+                st.caption(f"  ... 외 {len(active_filters) - 3}개")
+            
+            # 필터 초기화 버튼
+            if st.button("🔄 필터 초기화", use_container_width=True, type="secondary", key="quick_reset_filters"):
+                st.session_state.price_range = None
+                st.session_state.rating_range = None
+                st.session_state.review_count_range = None
+                st.session_state.search_query = ""
+                st.session_state.price_grade = 5
+                st.session_state.rating_grade = 5
+                st.session_state.review_grade = 5
+                st.rerun()
         
         # 제품 선택 탭 구성
         product_select_tab1, product_select_tab2 = st.tabs(["📦 제품 선택", "⚙️ 필터 설정"])
@@ -1068,120 +1190,160 @@ def main():
             st.markdown("### ⚙️ 필터 설정")
             st.caption("💡 필터를 설정하면 제품 선택 목록이 필터링됩니다. 원하는 조건에 맞는 제품만 표시됩니다.")
             
-            # 가격 범위 필터 (별 1~5 등급으로 재설정)
-            if all_products_list:
-                prices = [p.get("price", 0) for p in all_products_list if p.get("price") and p.get("price") > 0]
-                if prices:
-                    prices_sorted = sorted(prices)
-                    # 데이터를 5등급으로 분할
-                    n = len(prices_sorted)
-                    price_grade_1 = prices_sorted[0]  # 최소값
-                    price_grade_2 = prices_sorted[n // 5] if n >= 5 else prices_sorted[n // 2]
-                    price_grade_3 = prices_sorted[n * 2 // 5] if n >= 5 else prices_sorted[n * 2 // 3]
-                    price_grade_4 = prices_sorted[n * 4 // 5] if n >= 5 else prices_sorted[n - 1]
-                    price_grade_5 = prices_sorted[-1]  # 최대값
-                    
-                    # 별 1~5 등급 선택
-                    price_grade = st.select_slider(
-                        "💰 가격 등급",
-                        options=[1, 2, 3, 4, 5],
-                        value=st.session_state.get('price_grade', 5),
-                        format_func=lambda x: f"⭐{x}등급",
-                        key="price_grade"
-                    )
-                    # 등급에 따른 실제 가격 범위 계산
-                    if price_grade == 1:
-                        price_range = (float(price_grade_1), float(price_grade_2))
-                    elif price_grade == 2:
-                        price_range = (float(price_grade_1), float(price_grade_3))
-                    elif price_grade == 3:
-                        price_range = (float(price_grade_1), float(price_grade_4))
-                    elif price_grade == 4:
-                        price_range = (float(price_grade_1), float(price_grade_5))
-                    else:  # 5
-                        price_range = (float(price_grade_1), float(price_grade_5))
-                    st.session_state.price_range = price_range
-                    st.caption(f"가격 범위: ${price_range[0]:.2f} ~ ${price_range[1]:.2f}")
+            # ========== 필터 적용 순서 시각화 (제안서 #2) ==========
+            with st.expander("📋 필터 적용 순서", expanded=False):
+                st.markdown("""
+                **필터는 다음 순서로 적용됩니다:**
+                
+                1️⃣ **가격 범위** → 2️⃣ **평점 범위** → 3️⃣ **리뷰 수 범위** → 4️⃣ **검색어**
+                
+                모든 필터는 **AND 조건**으로 적용됩니다 (모든 조건을 만족하는 제품만 표시).
+                """)
             
-            # 평점 범위 필터 (별 1~5 등급으로 재설정)
-            if all_products_list:
-                ratings = [p.get("rating_avg", 0) for p in all_products_list if p.get("rating_avg") and p.get("rating_avg") > 0]
-                if ratings:
-                    ratings_sorted = sorted(ratings)
-                    # 데이터를 5등급으로 분할
-                    n = len(ratings_sorted)
-                    rating_grade_1 = ratings_sorted[0]  # 최소값
-                    rating_grade_2 = ratings_sorted[n // 5] if n >= 5 else ratings_sorted[n // 2]
-                    rating_grade_3 = ratings_sorted[n * 2 // 5] if n >= 5 else ratings_sorted[n * 2 // 3]
-                    rating_grade_4 = ratings_sorted[n * 4 // 5] if n >= 5 else ratings_sorted[n - 1]
-                    rating_grade_5 = ratings_sorted[-1]  # 최대값
-                    
-                    # 별 1~5 등급 선택
-                    rating_grade = st.select_slider(
-                        "⭐ 평점 등급",
-                        options=[1, 2, 3, 4, 5],
-                        value=st.session_state.get('rating_grade', 5),
-                        format_func=lambda x: f"⭐{x}등급",
-                        key="rating_grade"
-                    )
-                    # 등급에 따른 실제 평점 범위 계산
-                    if rating_grade == 1:
-                        rating_range = (float(rating_grade_1), float(rating_grade_2))
-                    elif rating_grade == 2:
-                        rating_range = (float(rating_grade_1), float(rating_grade_3))
-                    elif rating_grade == 3:
-                        rating_range = (float(rating_grade_1), float(rating_grade_4))
-                    elif rating_grade == 4:
-                        rating_range = (float(rating_grade_1), float(rating_grade_5))
-                    else:  # 5
-                        rating_range = (float(rating_grade_1), float(rating_grade_5))
-                    st.session_state.rating_range = rating_range
-                    st.caption(f"평점 범위: {rating_range[0]:.1f} ~ {rating_range[1]:.1f}점")
+            # 필터 그룹화 (제안서 #2)
+            with st.expander("💰 가격 및 평점 필터", expanded=True):
+                # 가격 범위 필터 (별 1~5 등급으로 재설정)
+                if all_products_list:
+                    prices = [p.get("price", 0) for p in all_products_list if p.get("price") and p.get("price") > 0]
+                    if prices:
+                        prices_sorted = sorted(prices)
+                        # 데이터를 5등급으로 분할
+                        n = len(prices_sorted)
+                        price_grade_1 = prices_sorted[0]  # 최소값
+                        price_grade_2 = prices_sorted[n // 5] if n >= 5 else prices_sorted[n // 2]
+                        price_grade_3 = prices_sorted[n * 2 // 5] if n >= 5 else prices_sorted[n * 2 // 3]
+                        price_grade_4 = prices_sorted[n * 4 // 5] if n >= 5 else prices_sorted[n - 1]
+                        price_grade_5 = prices_sorted[-1]  # 최대값
+                        
+                        # 별 1~5 등급 선택
+                        price_grade = st.select_slider(
+                            "💰 가격 등급",
+                            options=[1, 2, 3, 4, 5],
+                            value=st.session_state.get('price_grade', 5),
+                            format_func=lambda x: f"⭐{x}등급",
+                            key="price_grade",
+                            help="가격 범위를 5등급으로 나누어 선택합니다. 등급이 높을수록 더 넓은 가격 범위를 포함합니다."
+                        )
+                        # 등급에 따른 실제 가격 범위 계산
+                        if price_grade == 1:
+                            price_range = (float(price_grade_1), float(price_grade_2))
+                        elif price_grade == 2:
+                            price_range = (float(price_grade_1), float(price_grade_3))
+                        elif price_grade == 3:
+                            price_range = (float(price_grade_1), float(price_grade_4))
+                        elif price_grade == 4:
+                            price_range = (float(price_grade_1), float(price_grade_5))
+                        else:  # 5
+                            price_range = (float(price_grade_1), float(price_grade_5))
+                        st.session_state.price_range = price_range
+                        st.caption(f"가격 범위: ${price_range[0]:.2f} ~ ${price_range[1]:.2f}")
+                
+                # 평점 범위 필터 (별 1~5 등급으로 재설정)
+                if all_products_list:
+                    ratings = [p.get("rating_avg", 0) for p in all_products_list if p.get("rating_avg") and p.get("rating_avg") > 0]
+                    if ratings:
+                        ratings_sorted = sorted(ratings)
+                        # 데이터를 5등급으로 분할
+                        n = len(ratings_sorted)
+                        rating_grade_1 = ratings_sorted[0]  # 최소값
+                        rating_grade_2 = ratings_sorted[n // 5] if n >= 5 else ratings_sorted[n // 2]
+                        rating_grade_3 = ratings_sorted[n * 2 // 5] if n >= 5 else ratings_sorted[n * 2 // 3]
+                        rating_grade_4 = ratings_sorted[n * 4 // 5] if n >= 5 else ratings_sorted[n - 1]
+                        rating_grade_5 = ratings_sorted[-1]  # 최대값
+                        
+                        # 별 1~5 등급 선택
+                        rating_grade = st.select_slider(
+                            "⭐ 평점 등급",
+                            options=[1, 2, 3, 4, 5],
+                            value=st.session_state.get('rating_grade', 5),
+                            format_func=lambda x: f"⭐{x}등급",
+                            key="rating_grade",
+                            help="평점 범위를 5등급으로 나누어 선택합니다. 등급이 높을수록 더 넓은 평점 범위를 포함합니다."
+                        )
+                        # 등급에 따른 실제 평점 범위 계산
+                        if rating_grade == 1:
+                            rating_range = (float(rating_grade_1), float(rating_grade_2))
+                        elif rating_grade == 2:
+                            rating_range = (float(rating_grade_1), float(rating_grade_3))
+                        elif rating_grade == 3:
+                            rating_range = (float(rating_grade_1), float(rating_grade_4))
+                        elif rating_grade == 4:
+                            rating_range = (float(rating_grade_1), float(rating_grade_5))
+                        else:  # 5
+                            rating_range = (float(rating_grade_1), float(rating_grade_5))
+                        st.session_state.rating_range = rating_range
+                        st.caption(f"평점 범위: {rating_range[0]:.1f} ~ {rating_range[1]:.1f}점")
+                
+                # 리뷰 수 필터 (별 1~5 등급으로 재설정)
+                if all_products_list:
+                    review_counts = [p.get("rating_count", 0) for p in all_products_list if p.get("rating_count")]
+                    if review_counts:
+                        reviews_sorted = sorted(review_counts)
+                        # 데이터를 5등급으로 분할
+                        n = len(reviews_sorted)
+                        review_grade_1 = reviews_sorted[0]  # 최소값
+                        review_grade_2 = reviews_sorted[n // 5] if n >= 5 else reviews_sorted[n // 2]
+                        review_grade_3 = reviews_sorted[n * 2 // 5] if n >= 5 else reviews_sorted[n * 2 // 3]
+                        review_grade_4 = reviews_sorted[n * 4 // 5] if n >= 5 else reviews_sorted[n - 1]
+                        review_grade_5 = reviews_sorted[-1]  # 최대값
+                        
+                        # 별 1~5 등급 선택
+                        review_grade = st.select_slider(
+                            "💬 리뷰 수 등급",
+                            options=[1, 2, 3, 4, 5],
+                            value=st.session_state.get('review_grade', 5),
+                            format_func=lambda x: f"⭐{x}등급",
+                            key="review_grade",
+                            help="리뷰 수 범위를 5등급으로 나누어 선택합니다. 등급이 높을수록 더 많은 리뷰를 가진 제품을 포함합니다."
+                        )
+                        # 등급에 따른 실제 리뷰 수 범위 계산
+                        if review_grade == 1:
+                            review_count_range = (int(review_grade_1), int(review_grade_2))
+                        elif review_grade == 2:
+                            review_count_range = (int(review_grade_1), int(review_grade_3))
+                        elif review_grade == 3:
+                            review_count_range = (int(review_grade_1), int(review_grade_4))
+                        elif review_grade == 4:
+                            review_count_range = (int(review_grade_1), int(review_grade_5))
+                        else:  # 5
+                            review_count_range = (int(review_grade_1), int(review_grade_5))
+                        st.session_state.review_count_range = review_count_range
+                        st.caption(f"리뷰 수 범위: {review_count_range[0]} ~ {review_count_range[1]}개")
             
-            # 리뷰 수 필터 (별 1~5 등급으로 재설정)
-            if all_products_list:
-                review_counts = [p.get("rating_count", 0) for p in all_products_list if p.get("rating_count")]
-                if review_counts:
-                    reviews_sorted = sorted(review_counts)
-                    # 데이터를 5등급으로 분할
-                    n = len(reviews_sorted)
-                    review_grade_1 = reviews_sorted[0]  # 최소값
-                    review_grade_2 = reviews_sorted[n // 5] if n >= 5 else reviews_sorted[n // 2]
-                    review_grade_3 = reviews_sorted[n * 2 // 5] if n >= 5 else reviews_sorted[n * 2 // 3]
-                    review_grade_4 = reviews_sorted[n * 4 // 5] if n >= 5 else reviews_sorted[n - 1]
-                    review_grade_5 = reviews_sorted[-1]  # 최대값
-                    
-                    # 별 1~5 등급 선택
-                    review_grade = st.select_slider(
-                        "💬 리뷰 수 등급",
-                        options=[1, 2, 3, 4, 5],
-                        value=st.session_state.get('review_grade', 5),
-                        format_func=lambda x: f"⭐{x}등급",
-                        key="review_grade"
-                    )
-                    # 등급에 따른 실제 리뷰 수 범위 계산
-                    if review_grade == 1:
-                        review_count_range = (int(review_grade_1), int(review_grade_2))
-                    elif review_grade == 2:
-                        review_count_range = (int(review_grade_1), int(review_grade_3))
-                    elif review_grade == 3:
-                        review_count_range = (int(review_grade_1), int(review_grade_4))
-                    elif review_grade == 4:
-                        review_count_range = (int(review_grade_1), int(review_grade_5))
-                    else:  # 5
-                        review_count_range = (int(review_grade_1), int(review_grade_5))
-                    st.session_state.review_count_range = review_count_range
-                    st.caption(f"리뷰 수 범위: {review_count_range[0]} ~ {review_count_range[1]}개")
-            
-            # 신뢰도 필터
-            trust_filter = st.multiselect(
-                "🎯 신뢰도 등급",
-                options=["HIGH", "MEDIUM", "LOW"],
-                default=st.session_state.get('trust_filter', ["HIGH", "MEDIUM", "LOW"]),
-                key="trust_filter"
-            )
+            # 고급 필터 그룹
+            with st.expander("🔍 고급 필터", expanded=False):
+                # 신뢰도 필터
+                trust_filter = st.multiselect(
+                    "🎯 신뢰도 등급",
+                    options=["HIGH", "MEDIUM", "LOW"],
+                    default=st.session_state.get('trust_filter', ["HIGH", "MEDIUM", "LOW"]),
+                    key="trust_filter",
+                    help="제품의 신뢰도 등급으로 필터링합니다. HIGH/MEDIUM/LOW 중 선택할 수 있습니다."
+                )
             
             st.markdown("---")
+            
+            # ========== 필터 도움말 (제안서 #9) ==========
+            with st.expander("❓ 필터 사용 가이드", expanded=False):
+                st.markdown("""
+                ### 💰 가격 등급 필터
+                제품의 가격 범위를 5등급으로 나누어 필터링합니다. 등급이 높을수록 더 넓은 가격 범위를 포함합니다.
+                
+                ### ⭐ 평점 등급 필터
+                제품의 평균 평점 범위를 5등급으로 나누어 필터링합니다. 등급이 높을수록 더 넓은 평점 범위를 포함합니다.
+                
+                ### 💬 리뷰 수 등급 필터
+                제품의 리뷰 수 범위를 5등급으로 나누어 필터링합니다. 등급이 높을수록 더 많은 리뷰를 가진 제품을 포함합니다.
+                
+                ### 🎯 신뢰도 등급 필터
+                제품의 신뢰도 등급(HIGH/MEDIUM/LOW)으로 필터링합니다. 여러 등급을 선택할 수 있습니다.
+                
+                ### 💡 사용 팁
+                - 필터를 조합하여 원하는 제품을 빠르게 찾을 수 있습니다
+                - "필터 초기화" 버튼으로 모든 필터를 한 번에 해제할 수 있습니다
+                - 필터 결과는 실시간으로 업데이트됩니다
+                - 모든 필터는 AND 조건으로 적용됩니다 (모든 조건을 만족하는 제품만 표시)
+                """)
             
             # 필터 관리 버튼
             col_reset, col_save = st.columns(2)
@@ -1499,13 +1661,41 @@ def main():
     
     # 제품 선택 완료 시 자동으로 분석 실행
     if len(selected_labels) >= 1:  # 메인 제품만 선택되어도 분석 실행
-        # 선택된 제품 데이터 가져오기
+        # 선택된 제품 데이터 가져오기 (all_data에 없으면 직접 조회)
         selected_data = []
         for label in selected_labels:
             if label in product_options:
                 product_id = product_options[label]
+                
+                # all_data에 있으면 가져오기
                 if product_id in all_data:
                     selected_data.append(all_data[product_id])
+                else:
+                    # all_data에 없으면 직접 조회 (비교 제품이 자동 추천된 경우)
+                    try:
+                        # 제품 정보 찾기
+                        product_data = next((p for p in all_products_list if p.get('id') == product_id), None)
+                        if product_data:
+                            # 리뷰 조회
+                            reviews = get_reviews_by_product(product_id)
+                            # 체크리스트 생성
+                            checklist = generate_checklist_results(reviews)
+                            # AI 분석 생성
+                            ai_result = generate_ai_analysis(product_data, checklist)
+                            
+                            # 데이터 구조 생성 및 추가
+                            data_entry = {
+                                "product": product_data,
+                                "reviews": reviews,
+                                "checklist_results": checklist,
+                                "ai_result": ai_result
+                            }
+                            selected_data.append(data_entry)
+                            # all_data에도 추가 (다음 사용을 위해)
+                            all_data[product_id] = data_entry
+                    except Exception as e:
+                        st.error(f"제품 데이터 조회 실패 ({label}): {e}")
+                        continue
         
         if not selected_data:
             st.warning("선택된 제품 데이터를 찾을 수 없습니다.")
@@ -1647,6 +1837,8 @@ def main():
                     if set(current_compare_labels[:2]) != set(old_labels):
                         st.session_state.compare_products_labels = current_compare_labels[:2]  # 최대 2개
                         st.session_state.compare_products = [compare_options[label] for label in st.session_state.compare_products_labels if label in compare_options]
+                        # 비교 제품 선택 시 자동으로 차트 업데이트
+                        st.rerun()
             else:
                 # 선택 해제
                 current_compare_labels = st.session_state.get('compare_products_labels', [])
@@ -1655,6 +1847,8 @@ def main():
                     if set(new_labels) != set(current_compare_labels):
                         st.session_state.compare_products_labels = new_labels
                         st.session_state.compare_products = [compare_options[label] for label in new_labels if label in compare_options]
+                        # 비교 제품 해제 시 자동으로 차트 업데이트
+                        st.rerun()
         else:
             if len(selected_labels) > 1:
                 st.success(f"**비교 제품 1**: {selected_labels[1]}")
@@ -1720,6 +1914,8 @@ def main():
                         if set(current_compare_labels[:2]) != set(old_labels):
                             st.session_state.compare_products_labels = current_compare_labels[:2]  # 최대 2개
                             st.session_state.compare_products = [compare_options[label] for label in st.session_state.compare_products_labels if label in compare_options]
+                            # 비교 제품 선택 시 자동으로 차트 업데이트
+                            st.rerun()
             else:
                 # 선택 해제
                 current_compare_labels = st.session_state.get('compare_products_labels', [])
@@ -1728,6 +1924,8 @@ def main():
                     if set(new_labels) != set(current_compare_labels):
                         st.session_state.compare_products_labels = new_labels
                         st.session_state.compare_products = [compare_options[label] for label in new_labels if label in compare_options]
+                        # 비교 제품 해제 시 자동으로 차트 업데이트
+                        st.rerun()
         else:
             if len(selected_labels) > 2:
                 st.success(f"**비교 제품 2**: {selected_labels[2]}")
