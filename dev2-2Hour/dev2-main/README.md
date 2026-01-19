@@ -1,223 +1,227 @@
-# 건기식 리뷰 팩트체크 엔진
+# Health Supplement Review Fact-Check Engine
 
-건강기능식품 리뷰의 신뢰도를 정량적으로 평가하고, AI 약사 페르소나를 통해 전문적인 분석을 제공하는 시스템입니다.
+A system that quantitatively evaluates the reliability of health supplement reviews and provides professional analysis through an AI pharmacist persona.
 
-## 주요 기능
+## Key Features
 
-### 1. 신뢰도 검증 엔진 (`core/validator.py`)
-- **13단계 광고 판별 체크리스트** 기반 자동 검증
-- **신뢰도 점수 계산**: `S = (L×0.2) + (R×0.2) + (M×0.3) + (P×0.1) + (C×0.2)`
-- **감점 시스템**: 항목당 -10점, 40점 미만 또는 3개 이상 감점 시 광고 판별
+### 1. Reliability Verification Engine (`core/validator.py`)
+- **13-step advertising detection checklist** based automatic verification
+- **Reliability score calculation**: `S = (L×0.2) + (R×0.2) + (M×0.3) + (P×0.1) + (C×0.2)`
+- **Penalty system**: -10 points per item, flagged as advertisement if score < 40 or 3+ penalties
 
-### 2. AI 약사 분석 엔진 (`core/analyzer.py`)
-- **페르소나**: 15년 경력 임상 약사
-- **AI 모델**: Anthropic Claude Sonnet 4.5
-- **출력**: JSON 형식 (요약, 효능, 부작용, 신뢰도, 조언)
-- **할루시네이션 방지**: 리뷰 원문 근거만 추출
+### 2. AI Pharmacist Analysis Engine (`core/analyzer.py`)
+- **Persona**: 15-year experienced clinical pharmacist
+- **AI Model**: Anthropic Claude Sonnet 4.5
+- **Output**: JSON format (summary, efficacy, side effects, reliability, advice)
+- **Hallucination prevention**: Only extracts evidence from review original text
 
-## 설치 방법
+## Installation
 
 ```bash
-# 1. 저장소 클론
-git clone https://github.com/tturupapa-stack/dev2.git
-cd dev2
+# 1. Clone repository
+git clone https://github.com/Siyeolryu/ica-github.git
+cd ica-github/dev2-2Hour/dev2-main
 
-# 2. 의존성 설치
+# 2. Install dependencies
 pip install -r requirements.txt
 
-# 3. 환경 변수 설정
-# .env 파일을 생성하고 다음 내용을 입력하세요
+# 3. Set up environment variables
+# Create .env file and add the following content
 ```
 
-### 환경 변수 설정 (.env 파일)
+### Environment Variables Setup (.env file)
 
-프로젝트 루트에 `.env` 파일을 생성하고 다음 내용을 추가하세요:
+Create a `.env` file in the project root and add the following:
 
 ```env
 # Anthropic Claude API
 ANTHROPIC_API_KEY=your_anthropic_api_key_here
 
-# Supabase 설정
+# Supabase Configuration
 SUPABASE_URL=https://bvowxbpqtfpkkxkzsumf.supabase.co
 SUPABASE_ANON_KEY=your_supabase_anon_key_here
 SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key_here
 ```
 
-**Supabase 키 확인 방법:**
-1. [Supabase Dashboard](https://supabase.com/dashboard) 접속
-2. 프로젝트 선택 → Settings → API
-3. **Project URL**: `SUPABASE_URL`에 입력
-4. **anon/public key**: `SUPABASE_ANON_KEY`에 입력
-5. **service_role key**: `SUPABASE_SERVICE_ROLE_KEY`에 입력 (관리자 권한)
+**How to get Supabase keys:**
+1. Access [Supabase Dashboard](https://supabase.com/dashboard)
+2. Select project → Settings → API
+3. **Project URL**: Enter in `SUPABASE_URL`
+4. **anon/public key**: Enter in `SUPABASE_ANON_KEY`
+5. **service_role key**: Enter in `SUPABASE_SERVICE_ROLE_KEY` (admin privileges)
 
-## 사용 방법
+## Usage
 
-### 기본 사용 예제
+### Basic Usage Example
 
 ```python
 from core import validate_review, analyze_review
 
-# 1. 신뢰도 검증
-review_text = "제품을 한 달 사용했는데 효과가 좋았습니다..."
+# 1. Reliability verification
+review_text = "I've been using this product for a month and it's been effective..."
 
 result = validate_review(
     review_text=review_text,
-    length_score=70,      # 리뷰 길이 점수 (0-100)
-    repurchase_score=80,  # 재구매 의사 점수 (0-100)
-    monthly_use_score=100, # 한달 사용 여부 (0-100)
-    photo_score=50,       # 사진 첨부 점수 (0-100)
-    consistency_score=85  # 내용 일치도 점수 (0-100)
+    length_score=70,      # Review length score (0-100)
+    repurchase_score=80,  # Repurchase intention score (0-100)
+    monthly_use_score=100, # One month usage (0-100)
+    photo_score=50,       # Photo attachment score (0-100)
+    consistency_score=85  # Content consistency score (0-100)
 )
 
-print(f"신뢰도 점수: {result['trust_score']}")
-print(f"광고 여부: {result['is_ad']}")
-print(f"감점 사유: {result['reasons']}")
+print(f"Reliability score: {result['trust_score']}")
+print(f"Is advertisement: {result['is_ad']}")
+print(f"Penalty reasons: {result['reasons']}")
 
-# 2. AI 약사 분석 (광고가 아닌 경우만)
+# 2. AI Pharmacist Analysis (only for non-ad reviews)
 if not result['is_ad']:
     ai_result = analyze_review(review_text)
-    print(f"요약: {ai_result['Summary']}")
-    print(f"효능: {ai_result['Efficacy']}")
-    print(f"부작용: {ai_result['Side_effects']}")
-    print(f"조언: {ai_result['Tip']}")
+    print(f"Summary: {ai_result['Summary']}")
+    print(f"Efficacy: {ai_result['Efficacy']}")
+    print(f"Side effects: {ai_result['Side_effects']}")
+    print(f"Advice: {ai_result['Tip']}")
 ```
 
-### 예제 실행
+### Run Example
 
 ```bash
 python example.py
 ```
 
-## 프로젝트 구조
+## Project Structure
 
 ```
-team_projects_logic_D/
-├── core/                   # 핵심 모듈
+dev2-main/
+├── core/                   # Core modules
 │   ├── __init__.py
-│   ├── validator.py        # 신뢰도 검증 엔진
-│   └── analyzer.py         # AI 약사 분석 엔진
-├── database/               # 데이터베이스 모듈
+│   ├── validator.py        # Reliability verification engine
+│   └── analyzer.py         # AI pharmacist analysis engine
+├── database/               # Database modules
 │   ├── __init__.py
-│   ├── supabase_client.py  # Supabase 클라이언트
-│   └── test_connection.py  # 연결 테스트 스크립트
-├── logic_designer/         # 로직 설계 모듈
+│   ├── supabase_client.py  # Supabase client
+│   └── test_connection.py  # Connection test script
+├── logic_designer/         # Logic design modules
 │   ├── __init__.py
-│   ├── checklist.py        # 13단계 체크리스트
-│   ├── trust_score.py      # 신뢰도 점수 계산
-│   └── analyzer.py         # AI 분석 엔진
-├── logs/                   # 개발 로그
-│   ├── dev_log.md          # 개발일지
-│   ├── prompt_log.md       # 프롬프트 설계 로그
-│   └── output_review.md    # 결과값 검토
-├── example.py              # 사용 예제
-├── requirements.txt        # 의존성 패키지
-├── .env                    # 환경 변수 (gitignore)
-├── SPEC.md                 # 기획서
-├── CLAUDE.md               # AI 작업 지침
-└── README.md               # 프로젝트 문서
+│   ├── checklist.py        # 13-step checklist
+│   ├── trust_score.py      # Reliability score calculation
+│   └── analyzer.py         # AI analysis engine
+├── ui_integration/         # Streamlit UI integration
+│   ├── app.py              # Main Streamlit application
+│   ├── supabase_data.py    # Supabase data manager
+│   └── visualizations.py   # Chart visualization components
+├── logs/                   # Development logs
+│   ├── dev_log.md          # Development diary
+│   ├── prompt_log.md       # Prompt design log
+│   └── output_review.md    # Output review
+├── example.py              # Usage example
+├── requirements.txt        # Dependency packages
+├── .env                    # Environment variables (gitignore)
+├── SPEC.md                 # Project specification
+├── CLAUDE.md               # AI work instructions
+└── README.md               # Project documentation
 ```
 
-## 13단계 광고 판별 체크리스트
+## 13-Step Advertising Detection Checklist
 
-1. 대가성 문구 존재
-2. 감탄사 남발
-3. 정돈된 문단 구조
-4. 개인 경험 부재
-5. 원료 특징 나열
-6. 키워드 반복
-7. 단점 회피
-8. 찬사 위주 구성
-9. 전문 용어 오남용
-10. 비현실적 효과 강조
-11. 타사 제품 비교
-12. 홍보성 블로그 문체
-13. 이모티콘 과다 사용
+1. Compensation statement presence
+2. Excessive exclamation marks
+3. Structured paragraph format
+4. Lack of personal experience
+5. Ingredient feature listing
+6. Keyword repetition
+7. Avoidance of drawbacks
+8. Praise-focused composition
+9. Misuse of technical terms
+10. Unrealistic effect emphasis
+11. Competitor product comparison
+12. Promotional blog writing style
+13. Excessive emoji usage
 
-## 신뢰도 점수 계산 공식
+## Reliability Score Calculation Formula
 
 ```
 S = (L × 0.2) + (R × 0.2) + (M × 0.3) + (P × 0.1) + (C × 0.2)
 ```
 
-- **L** (Length): 리뷰 길이 점수
-- **R** (Repurchase): 재구매 의사 점수
-- **M** (Monthly Use): 한달 이상 사용 여부 점수
-- **P** (Photo): 사진 첨부 점수
-- **C** (Consistency): 내용 일치도 점수
+- **L** (Length): Review length score
+- **R** (Repurchase): Repurchase intention score
+- **M** (Monthly Use): One month+ usage score
+- **P** (Photo): Photo attachment score
+- **C** (Consistency): Content consistency score
 
-## AI 분석 출력 형식
+## AI Analysis Output Format
 
 ```json
 {
-  "Summary": "리뷰 한 줄 요약",
-  "Efficacy": ["효능1", "효능2"],
-  "Side_effects": ["부작용1", "부작용2"],
+  "Summary": "One-line review summary",
+  "Efficacy": ["Efficacy 1", "Efficacy 2"],
+  "Side_effects": ["Side effect 1", "Side effect 2"],
   "Trust_score": 85,
-  "Tip": "약사의 핵심 조언",
-  "disclaimer": "본 분석은 의학적 진단이 아닌 실사용자 체감 정보를 기반으로 합니다."
+  "Tip": "Pharmacist's key advice",
+  "disclaimer": "This analysis is based on actual user experience, not medical diagnosis."
 }
 ```
 
-## 기술 스택
+## Tech Stack
 
-- **언어**: Python 3.8+
-- **AI 모델**: Anthropic Claude Sonnet 4.5
-- **데이터베이스**: Supabase (PostgreSQL)
-- **주요 라이브러리**: anthropic, python-dotenv, supabase
+- **Language**: Python 3.8+
+- **AI Model**: Anthropic Claude Sonnet 4.5
+- **Database**: Supabase (PostgreSQL)
+- **Key Libraries**: anthropic, python-dotenv, supabase, streamlit, plotly
 
-## Supabase 데이터베이스 연동
+## Supabase Database Integration
 
-### 연결 테스트
+### Connection Test
 
 ```bash
-# Supabase 연결 테스트
+# Test Supabase connection
 python database/test_connection.py
 ```
 
-### Python에서 사용하기
+### Usage in Python
 
 ```python
 from database import get_supabase_client, test_connection
 
-# 연결 테스트
+# Test connection
 if test_connection():
-    print("✅ Supabase 연결 성공!")
+    print("✅ Supabase connection successful!")
     
-    # 클라이언트 사용
+    # Use client
     supabase = get_supabase_client()
     
-    # 데이터 조회 예제
+    # Data query example
     # response = supabase.table('your_table').select('*').execute()
 ```
 
-### Supabase 프로젝트 정보
+### Supabase Project Information
 
-- **프로젝트 URL**: `https://bvowxbpqtfpkkxkzsumf.supabase.co`
-- **GitHub 저장소**: [https://github.com/tturupapa-stack/dev2](https://github.com/tturupapa-stack/dev2)
+- **Project URL**: `https://bvowxbpqtfpkkxkzsumf.supabase.co`
+- **GitHub Repository**: [https://github.com/Siyeolryu/ica-github](https://github.com/Siyeolryu/ica-github)
 
-## 주의 사항
+## Important Notes
 
-1. **API 키 보안**
-   - `.env` 파일은 절대 Git에 커밋하지 마세요
-   - `.gitignore`에 `.env`가 포함되어 있는지 확인하세요
-   - Supabase 서비스 역할 키는 서버 사이드에서만 사용하세요
+1. **API Key Security**
+   - Never commit `.env` file to Git
+   - Ensure `.env` is included in `.gitignore`
+   - Use Supabase service role key only on server side
 
-2. **AI 분석 비용**
-   - AI 분석은 비용이 발생하므로, 광고가 아닌 리뷰만 분석하세요
-   - API 키 발급: https://console.anthropic.com/settings/keys
+2. **AI Analysis Costs**
+   - AI analysis incurs costs, so only analyze non-ad reviews
+   - API key issuance: https://console.anthropic.com/settings/keys
 
-3. **의료 정보 주의**
-   - 분석 결과는 참고용이며, 의학적 진단이 아닙니다
-   - 모든 분석 결과에 부인 공지가 포함됩니다
+3. **Medical Information Disclaimer**
+   - Analysis results are for reference only, not medical diagnosis
+   - All analysis results include a disclaimer
 
-## GitHub 저장소
+## GitHub Repository
 
-- **저장소**: [https://github.com/tturupapa-stack/dev2](https://github.com/tturupapa-stack/dev2)
+- **Repository**: [https://github.com/Siyeolryu/ica-github](https://github.com/Siyeolryu/ica-github)
 
-## 라이선스
+## License
 
-이 프로젝트는 팀 프로젝트용으로 개발되었습니다.
+This project is developed for team project use.
 
-## 기여자
+## Contributors
 
-- Logic Designer: 신뢰도 검증 엔진 및 AI 분석 로직 구현
+- Logic Designer: Reliability verification engine and AI analysis logic implementation

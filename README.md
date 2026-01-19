@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # 건기식 리뷰 팩트체크 시스템
 
 건강기능식품 리뷰의 신뢰도를 정량적으로 평가하고, AI 약사 페르소나를 통해 전문적인 분석을 제공하는 **Streamlit 웹 대시보드** 시스템입니다.
@@ -13,12 +14,45 @@
 ## 🚀 빠른 시작 (Quick Start)
 
 ### 1. 저장소 클론
+=======
+# Health Functional Food Review Fact-Check System
+
+A web service prototype that collects online reviews of health functional food products, uses AI to identify advertising reviews, and provides analysis results from a pharmacist's perspective.
+
+## 📖 Project Introduction
+
+This project analyzes review data for 5 Lutein products collected from iHerb to:
+- **Ad Review Detection**: Automatic verification based on 13-step checklist
+- **Trust Score Calculation**: Quantitative evaluation system
+- **AI Pharmacist Analysis**: Professional insights using Claude AI
+- **Visualization Dashboard**: Interactive UI based on Streamlit
+
+## 🏗️ Project Structure
+
+```
+ica-github/
+├── dev2-2Hour/
+│   └── dev2-main/          # Main project folder
+│       ├── docs/           # Project documents
+│       ├── database/       # Database module
+│       ├── logic_designer/ # Logic design and AI analysis
+│       ├── ui_integration/ # Streamlit UI
+│       ├── data_manager/   # Data collection and upload
+│       └── dev_logs/       # Development logs
+└── README.md               # This file
+```
+
+## 🚀 Quick Start
+
+### 1. Clone Repository
+>>>>>>> 594dd589835e0b427927b61f071200895ba5a000
 
 ```bash
 git clone https://github.com/Siyeolryu/ica-github.git
 cd ica-github/dev2-2Hour/dev2-main
 ```
 
+<<<<<<< HEAD
 ### 2. 의존성 설치
 
 ```bash
@@ -26,10 +60,17 @@ cd ica-github/dev2-2Hour/dev2-main
 pip install -r requirements.txt
 
 # UI 의존성
+=======
+### 2. Install Dependencies
+
+```bash
+pip install -r requirements.txt
+>>>>>>> 594dd589835e0b427927b61f071200895ba5a000
 cd ui_integration
 pip install -r requirements.txt
 ```
 
+<<<<<<< HEAD
 ### 3. 환경 변수 설정
 
 #### Streamlit 앱용 (권장)
@@ -64,12 +105,29 @@ ANTHROPIC_API_KEY=your-anthropic-api-key
 ```
 
 ### 4. Streamlit 앱 실행
+=======
+### 3. Environment Variables
+
+Create `.env` file and add:
+
+```env
+# Supabase Settings
+SUPABASE_URL=https://bvowxbpqtfpkkxkzsumf.supabase.co
+SUPABASE_ANON_KEY=your-supabase-anon-key
+
+# Anthropic Claude API (Optional)
+ANTHROPIC_API_KEY=your-anthropic-api-key
+```
+
+### 4. Run Streamlit App
+>>>>>>> 594dd589835e0b427927b61f071200895ba5a000
 
 ```bash
 cd ui_integration
 streamlit run app.py
 ```
 
+<<<<<<< HEAD
 브라우저에서 자동으로 `http://localhost:8501`이 열립니다.
 
 ## ✨ 주요 기능
@@ -409,3 +467,56 @@ python scripts/fix_products_ratings.py
 ---
 
 **문의**: 프로젝트 관련 문의사항은 GitHub Issues를 통해 남겨주세요.
+
+---
+
+## 📚 Main Features (English)
+
+### 1. Trust Score Verification Engine
+- 13-step ad detection checklist
+- Quantitative trust score calculation (0-100)
+- Automatic ad review detection
+
+### 2. AI Pharmacist Analysis
+- Claude AI-based professional analysis
+- Efficacy, side effects, advice provision
+- Hallucination prevention logic
+
+### 3. Visualization Dashboard
+- Trust score gauge chart
+- Radar chart (5 indicator comparison)
+- Price comparison bar chart
+- Review detail view
+
+## 📖 Detailed Documentation
+
+For detailed project documentation, refer to `dev2-2Hour/dev2-main/docs/` folder:
+
+- [Project Overview](dev2-2Hour/dev2-main/docs/project-overview.md)
+- [Team Collaboration Guide](dev2-2Hour/dev2-main/docs/team-collaboration-guide-week1.md)
+- [User Scenario](dev2-2Hour/dev2-main/docs/user-scenario.md)
+
+## 🛠️ Technology Stack
+
+- **Database**: Supabase (PostgreSQL)
+- **AI Analysis**: Anthropic Claude API
+- **UI Framework**: Streamlit
+- **Visualization**: Plotly
+- **Language**: Python 3.8+
+
+## 📝 Development Logs
+
+Project development process can be found in `dev2-2Hour/dev2-main/dev_logs/` folder.
+
+## 🤝 Contributing
+
+This is a team project. To contribute, please create an issue or submit a Pull Request.
+
+## 📄 License
+
+This project is created for educational purposes.
+
+## 🔗 Related Links
+
+- [Supabase Dashboard](https://supabase.com/dashboard/project/bvowxbpqtfpkkxkzsumf)
+- [Streamlit Cloud](https://streamlit.io/cloud)
