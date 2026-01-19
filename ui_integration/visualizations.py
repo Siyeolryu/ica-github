@@ -26,23 +26,33 @@ def render_gauge_chart(score, title="신뢰도 점수"):
     return fig
 
 def render_radar_chart(products_data):
-    """다차원 비교 레이더 차트 - 대형 화면 최적화"""
+    """다차원 비교 레이더 차트 - 대형 화면 최적화 (안전한 버전)"""
     fig = go.Figure()
     categories = ['신뢰도', '재구매율', '한달사용', '평균평점', '리뷰다양성']
     colors = ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6']
 
     for idx, data in enumerate(products_data):
-        p, ai, r = data["product"], data["ai_result"], data["reviews"]
-        # 지표 정규화 (0-100)
-        vals = [
-            ai['trust_score'],
-            (sum(1 for x in r if x["reorder"]) / len(r) * 100) if r else 0,
-            (sum(1 for x in r if x["one_month_use"]) / len(r) * 100) if r else 0,
-            (sum(x["rating"] for x in r) / len(r) * 20) if r else 0,
-            (len(set(x["reviewer"] for x in r)) / len(r) * 100) if r else 0
-        ]
-        fig.add_trace(go.Scatterpolar(r=vals, theta=categories, fill='toself', name=p['brand'],
-                                     line=dict(color=colors[idx % len(colors)], width=3)))
+        # 안전한 데이터 접근
+        p = data.get("product", {})
+        ai = data.get("ai_result", {})
+        r = data.get("reviews", [])
+
+        # 안전한 값 계산
+        trust_score = ai.get('trust_score', 0)
+        reorder_rate = (sum(1 for x in r if x.get("reorder", False)) / len(r) * 100) if r else 0
+        one_month_rate = (sum(1 for x in r if x.get("one_month_use", False)) / len(r) * 100) if r else 0
+        avg_rating = (sum(x.get("rating", 0) for x in r) / len(r) * 20) if r else 0
+        diversity_rate = (len(set(x.get("reviewer", "") for x in r)) / len(r) * 100) if r else 0
+
+        vals = [trust_score, reorder_rate, one_month_rate, avg_rating, diversity_rate]
+
+        fig.add_trace(go.Scatterpolar(
+            r=vals,
+            theta=categories,
+            fill='toself',
+            name=p.get('brand', 'Unknown'),
+            line=dict(color=colors[idx % len(colors)], width=3)
+        ))
 
     fig.update_layout(
         polar=dict(radialaxis=dict(visible=True, range=[0, 100])),
@@ -54,13 +64,28 @@ def render_radar_chart(products_data):
     return fig
 
 def render_price_comparison_chart(products_data):
-    """가격 비교 차트 - 가로 폭 강조"""
-    names = [f"{d['product']['brand']}" for d in products_data]
-    prices = [d['product']['price'] for d in products_data]
-    scores = [d['ai_result']['trust_score'] for d in products_data]
+    """가격 비교 차트 - 가로 폭 강조 (안전한 버전)"""
+    names = []
+    prices = []
+    scores = []
+
+    for d in products_data:
+        product = d.get('product', {})
+        ai_result = d.get('ai_result', {})
+
+        names.append(product.get('brand', 'Unknown'))
+        prices.append(product.get('price', 0))
+        scores.append(ai_result.get('trust_score', 0))
+
     colors = ['#22c55e' if s >= 70 else '#f59e0b' if s >= 50 else '#ef4444' for s in scores]
 
-    fig = go.Figure(go.Bar(x=names, y=prices, marker_color=colors, text=[f"${p}" for p in prices], textposition='auto'))
+    fig = go.Figure(go.Bar(
+        x=names,
+        y=prices,
+        marker_color=colors,
+        text=[f"${p:.2f}" for p in prices],
+        textposition='auto'
+    ))
     fig.update_layout(title="제품별 가격 비교 (USD)", height=450, margin=dict(t=60, b=40))
     return fig
 

@@ -262,6 +262,39 @@ def safe_find_item(items: list, predicate, default: Any = None) -> Any:
     return default
 
 
+def safe_parse_value(x: Any) -> float:
+    """
+    안전한 숫자 파싱 (테이블 정렬용)
+
+    Args:
+        x: 파싱할 값 (문자열, 숫자, None 등)
+
+    Returns:
+        float: 파싱된 숫자 또는 0.0
+
+    Example:
+        >>> safe_parse_value("75.0")
+        75.0
+        >>> safe_parse_value("$19.99")
+        19.99
+        >>> safe_parse_value("20개")
+        20.0
+        >>> safe_parse_value("4.5/5")
+        4.5
+        >>> safe_parse_value("85%")
+        85.0
+        >>> safe_parse_value(None)
+        0.0
+    """
+    try:
+        if x is None or x == '':
+            return 0.0
+        cleaned = str(x).replace("$", "").replace("개", "").replace("/5", "").replace("%", "").replace("점", "").strip()
+        return float(cleaned) if cleaned else 0.0
+    except (ValueError, TypeError):
+        return 0.0
+
+
 def validate_dict_structure(data: Dict[str, Any], required_keys: Optional[list] = None, optional_keys: Optional[list] = None) -> tuple:
     """
     딕셔너리 구조 검증
