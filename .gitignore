@@ -49,9 +49,7 @@ logs/*.log
 
 # Node.js
 node_modules/
-package-lock.json
-
-# Data files
+package-lock.json# Data files
 *.csv
 *.json
 !package.json

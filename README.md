@@ -104,7 +104,5 @@ Project development process can be found in `dev2-2Hour/dev2-main/dev_logs/` fol
 
 This is a team project. To contribute, please create an issue or submit a Pull Request.
 
-## 📄 License
-
-This project is created for educational purposes.## 🔗 Related Links- [Supabase Dashboard](https://supabase.com/dashboard/project/bvowxbpqtfpkkxkzsumf)
+## 📄 LicenseThis project is created for educational purposes.## 🔗 Related Links- [Supabase Dashboard](https://supabase.com/dashboard/project/bvowxbpqtfpkkxkzsumf)
 - [Streamlit Cloud](https://streamlit.io/cloud)
