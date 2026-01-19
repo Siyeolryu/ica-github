@@ -89,6 +89,95 @@ def validate_filters(filters: Dict) -> List[str]:
     
     return errors
 
+# ========== AI 차트 분석 헬퍼 함수 ==========
+def render_chart_with_ai_analysis(chart_func, chart_data, chart_type: str, chart_title: str, key_suffix: str = ""):
+    """
+    차트를 렌더링하고 AI 분석 기능을 제공하는 래퍼 함수
+    
+    Args:
+        chart_func: 차트 렌더링 함수
+        chart_data: 차트 데이터
+        chart_type: 차트 타입 (radar, gauge, bar 등)
+        chart_title: 차트 제목
+        key_suffix: 고유 키 접미사
+    """
+    # 차트 렌더링
+    fig = chart_func(chart_data) if chart_type != "gauge" else chart_func(chart_data[0], chart_data[1])
+    st.plotly_chart(fig, use_container_width=True, height=600 if chart_type == "radar" else 400)
+    
+    # AI 분석 버튼
+    if CHART_ANALYZER_AVAILABLE:
+        analyze_key = f"analyze_{chart_type}_{key_suffix}"
+        if st.button(f"🤖 {chart_title} AI 분석", key=analyze_key, use_container_width=True):
+            with st.spinner("AI가 차트를 분석 중입니다..."):
+                try:
+                    analyzer = ChartAnalyzer()
+                    
+                    # 차트 타입에 따라 데이터 준비
+                    if chart_type == "radar":
+                        analysis = analyzer.analyze_comparison_chart(chart_data, "radar")
+                    elif chart_type == "gauge":
+                        score = chart_data[0] if isinstance(chart_data, tuple) else chart_data
+                        title = chart_data[1] if isinstance(chart_data, tuple) else chart_title
+                        analysis = analyzer.analyze_chart_data(
+                            "gauge",
+                            {"score": score, "max": 100, "title": title},
+                            f"{title} 점수: {score}"
+                        )
+                    elif chart_type == "bar":
+                        # 가격 비교 차트
+                        if isinstance(chart_data, list) and len(chart_data) > 0 and isinstance(chart_data[0], dict):
+                            products_summary = {
+                                "products": [
+                                    {
+                                        "name": f"{d.get('product', {}).get('brand', '')} {d.get('product', {}).get('name', '')}",
+                                        "price": d.get('product', {}).get('price', 0),
+                                        "trust_score": d.get('ai_result', {}).get('trust_score', 0)
+                                    }
+                                    for d in chart_data
+                                ]
+                            }
+                            analysis = analyzer.analyze_chart_data("bar", products_summary, "가격 및 신뢰도 비교")
+                        else:
+                            analysis = analyzer.analyze_chart_data("bar", {"data": str(chart_data)})
+                    else:
+                        analysis = analyzer.analyze_chart_data(chart_type, {"data": str(chart_data)})
+                    
+                    # 결과 표시
+                    st.markdown("---")
+                    st.markdown("### 🤖 AI 차트 분석 결과")
+                    
+                    col_summary, col_findings = st.columns([1, 1])
+                    
+                    with col_summary:
+                        st.markdown("#### 📝 요약")
+                        st.info(analysis.get('summary', 'N/A'))
+                        
+                        st.markdown("#### 📈 트렌드")
+                        st.success(analysis.get('trends', 'N/A'))
+                    
+                    with col_findings:
+                        st.markdown("#### 🔍 주요 발견사항")
+                        findings = analysis.get('key_findings', [])
+                        if findings:
+                            for finding in findings:
+                                st.markdown(f"- {finding}")
+                        else:
+                            st.markdown("- 발견사항 없음")
+                    
+                    st.markdown("#### 💡 인사이트")
+                    st.warning(analysis.get('insights', 'N/A'))
+                    
+                    st.markdown(f"**데이터 품질**: {analysis.get('data_quality', 'N/A')}")
+                    
+                except Exception as e:
+                    st.error(f"AI 분석 중 오류 발생: {str(e)}")
+                    st.info("API 키가 설정되어 있는지 확인하세요.")
+    else:
+        st.info("💡 AI 차트 분석 기능을 사용하려면 ANTHROPIC_API_KEY를 설정하세요.")
+    
+    return fig
+
 # ========== 필터 히스토리 관리 ==========
 def save_filter_state_to_history(filters: Dict):
     """현재 필터 상태를 히스토리에 저장"""
@@ -215,8 +304,15 @@ try:
         render_checklist_visual,
         render_price_comparison_chart
     )
+    # AI 차트 분석기 import
+    try:
+        from chart_analyzer import ChartAnalyzer
+        CHART_ANALYZER_AVAILABLE = True
+    except ImportError:
+        CHART_ANALYZER_AVAILABLE = False
 except ImportError as e:
     import traceback
+    CHART_ANALYZER_AVAILABLE = False
     st.error(f"Visualizations import failed: {e}")
     print(f"[ERROR] Visualizations import failed: {e}")
     print(traceback.format_exc())
@@ -1213,13 +1309,23 @@ def main():
         col1, col2 = st.columns([1.5, 1])
         with col1:
             st.markdown("#### 🕸️ 다차원 비교 (레이더 차트)")
-            fig_radar = render_radar_chart(selected_data)
-            st.plotly_chart(fig_radar, use_container_width=True, height=600)
+            render_chart_with_ai_analysis(
+                render_radar_chart,
+                selected_data,
+                "radar",
+                "레이더 차트",
+                "radar_main"
+            )
         
         with col2:
             st.markdown("#### 💰 가격 및 신뢰도 요약")
-            fig_price = render_price_comparison_chart(selected_data)
-            st.plotly_chart(fig_price, use_container_width=True, height=400)
+            render_chart_with_ai_analysis(
+                render_price_comparison_chart,
+                selected_data,
+                "bar",
+                "가격 비교 차트",
+                "price_main"
+            )
             
             # 신뢰도 요약 카드
             st.markdown("#### 📊 신뢰도 요약")
@@ -1297,8 +1403,14 @@ def main():
                 
                 with col_top1:
                     st.markdown("#### 🎯 신뢰도 점수")
-                    fig_gauge = render_gauge_chart(ai_result.get("trust_score", 0), "신뢰도")
-                    st.plotly_chart(fig_gauge, use_container_width=True)
+                    trust_score = ai_result.get("trust_score", 0)
+                    render_chart_with_ai_analysis(
+                        render_gauge_chart,
+                        (trust_score, "신뢰도"),
+                        "gauge",
+                        "신뢰도 게이지",
+                        f"gauge_{product.get('id', 0)}"
+                    )
                     st.markdown(render_trust_badge(ai_result.get("trust_level", "medium")), unsafe_allow_html=True)
                 
                 with col_top2:
