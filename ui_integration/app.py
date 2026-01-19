@@ -30,6 +30,7 @@ from supabase_data import (
     get_all_categories,
     get_statistics_summary
 )
+from utils import safe_get_product_label, safe_find_item
 USE_SUPABASE = True
 
 # ========== 성능 최적화: 데이터 캐싱 ==========
@@ -789,7 +790,23 @@ def main():
             st.code(traceback.format_exc())
         return
     
-    product_options = {f"{v['product']['brand']} {v['product']['name']}": k for k, v in all_data.items()}
+    # 안전한 product_options 생성 (KeyError 방지)
+    product_options = {}
+    for k, v in all_data.items():
+        try:
+            product = v.get('product', {})
+            if product and isinstance(product, dict):
+                brand = product.get('brand', 'Unknown')
+                name = product.get('name', 'Unknown')
+                if brand and name:
+                    product_options[f"{brand} {name}"] = k
+        except (KeyError, TypeError, AttributeError) as e:
+            st.warning(f"제품 옵션 생성 중 오류 - 제품ID: {k}, 오류: {str(e)}")
+            continue
+    
+    if not product_options:
+        st.warning("분석할 수 있는 제품이 없습니다. Supabase 연결을 확인하세요.")
+        return
     
     # 캐싱된 제품 목록 및 카테고리 가져오기 (성능 최적화)
     all_products_list = get_cached_products() or []
@@ -1454,10 +1471,24 @@ def main():
             options=selected_labels,
             key="review_product_select"
         )
-        target_data = next(
-            d for d in selected_data
-            if f"{d['product']['brand']} {d['product']['name']}" == target_label
-        )
+        # 안전한 target_data 검색 (KeyError + StopIteration 방지)
+        target_data = None
+        for d in selected_data:
+            try:
+                product = d.get('product', {})
+                if product and isinstance(product, dict):
+                    brand = product.get('brand', '')
+                    name = product.get('name', '')
+                    if f"{brand} {name}" == target_label:
+                        target_data = d
+                        break
+            except (KeyError, TypeError, AttributeError):
+                continue
+        
+        if not target_data:
+            st.error(f"선택한 제품 '{target_label}'을 찾을 수 없습니다.")
+            st.info("제품 선택을 다시 확인해주세요.")
+            return
         
         reviews = target_data.get("reviews", [])
         product = target_data.get("product", {})

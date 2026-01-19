@@ -155,3 +155,139 @@ def safe_render_html(html_content: str, allow_script: bool = False) -> str:
         html_content = re.sub(r'on\w+\s*=', '', html_content, flags=re.IGNORECASE)  # 이벤트 핸들러 제거
     
     return html_content
+
+
+# ========== KeyError 방지 헬퍼 함수 ==========
+
+def safe_nested_get(obj: Any, keys: list, default: Any = None) -> Any:
+    """
+    안전한 중첩 딕셔너리 접근
+    
+    Args:
+        obj: 딕셔너리 객체
+        keys: 키 경로 리스트 또는 튜플 (예: ['product', 'brand'])
+        default: 기본값
+    
+    Returns:
+        값 또는 기본값
+    
+    Example:
+        >>> data = {'product': {'brand': 'NOW Foods'}}
+        >>> safe_nested_get(data, ['product', 'brand'], 'Unknown')
+        'NOW Foods'
+        >>> safe_nested_get(data, ['product', 'name'], 'Unknown')
+        'Unknown'
+    """
+    if not isinstance(obj, dict):
+        return default
+    
+    current = obj
+    for key in keys:
+        if isinstance(current, dict):
+            current = current.get(key)
+            if current is None:
+                return default
+        else:
+            return default
+    
+    return current if current is not None else default
+
+
+def safe_get_product_label(product_data: Dict[str, Any], default: str = "Unknown") -> str:
+    """
+    제품 라벨 추출 (안전한 방식)
+    
+    Args:
+        product_data: 제품 데이터 딕셔너리 (또는 {'product': {...}} 형식)
+        default: 기본 라벨
+    
+    Returns:
+        str: "브랜드 제품명" 형식의 라벨
+    """
+    if not product_data or not isinstance(product_data, dict):
+        return default
+    
+    # product_data가 직접 제품 정보를 포함하는 경우
+    if 'brand' in product_data and 'name' in product_data:
+        product = product_data
+    else:
+        # product_data가 {'product': {...}} 형식인 경우
+        product = product_data.get('product', {})
+    
+    if not isinstance(product, dict):
+        return default
+    
+    brand = product.get('brand', '').strip()
+    name = product.get('name', '').strip()
+    
+    if brand and name:
+        return f"{brand} {name}"
+    elif brand:
+        return brand
+    elif name:
+        return name
+    else:
+        return default
+
+
+def safe_find_item(items: list, predicate, default: Any = None) -> Any:
+    """
+    안전한 아이템 검색 (next() 대체)
+    
+    Args:
+        items: 검색할 리스트
+        predicate: 검색 조건 함수
+        default: 기본값
+    
+    Returns:
+        찾은 아이템 또는 default
+    
+    Example:
+        >>> data = [{'id': 1, 'name': 'A'}, {'id': 2, 'name': 'B'}]
+        >>> safe_find_item(data, lambda x: x.get('id') == 2)
+        {'id': 2, 'name': 'B'}
+        >>> safe_find_item(data, lambda x: x.get('id') == 3)
+        None
+    """
+    if not items or not isinstance(items, (list, tuple)):
+        return default
+    
+    for item in items:
+        try:
+            if predicate(item):
+                return item
+        except (KeyError, TypeError, AttributeError):
+            continue
+    
+    return default
+
+
+def validate_dict_structure(data: Dict[str, Any], required_keys: Optional[list] = None, optional_keys: Optional[list] = None) -> tuple:
+    """
+    딕셔너리 구조 검증
+    
+    Args:
+        data: 검증할 딕셔너리
+        required_keys: 필수 키 리스트
+        optional_keys: 선택적 키 리스트
+    
+    Returns:
+        tuple: (is_valid, missing_keys, extra_keys)
+    """
+    if not isinstance(data, dict):
+        return False, [], []
+    
+    missing_keys = []
+    if required_keys:
+        for key in required_keys:
+            if key not in data:
+                missing_keys.append(key)
+    
+    extra_keys = []
+    allowed_keys = set((required_keys or []) + (optional_keys or []))
+    for key in data.keys():
+        if key not in allowed_keys:
+            extra_keys.append(key)
+    
+    is_valid = len(missing_keys) == 0
+    return is_valid, missing_keys, extra_keys

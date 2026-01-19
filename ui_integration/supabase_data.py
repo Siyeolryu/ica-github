@@ -100,20 +100,36 @@ def get_products_by_category(category: str) -> List[Dict]:
     products = _fetch_from_supabase('products', f'select=*&category=eq.{category}&order=rating_count.desc')
     formatted = []
     for p in products:
+        # 안전한 제품 포맷팅 (KeyError 방지)
+        product_id = p.get('id')
+        if product_id is None:
+            print(f"경고: 제품 id 필드 누락 - {p}")
+            continue
+        
         price = p.get('price') or 0
+        if isinstance(price, str):
+            try:
+                price = float(price)
+            except ValueError:
+                price = 0
+        
         formatted.append({
-            "id": str(p['id']),
-            "name": p.get('title', ''),
-            "brand": p.get('brand', ''),
+            "id": str(product_id),
+            "name": (p.get('title') or p.get('name') or '').strip(),
+            "brand": (p.get('brand') or '').strip(),
             "price": price / 100 if price > 1000 else price,
-            "serving_size": "1 Softgel",
-            "servings_per_container": 60,
-            "ingredients": {"lutein": "20mg", "zeaxanthin": "4mg"},
-            "product_url": p.get('url', ''),
+            "serving_size": p.get('serving_size', '1 Softgel'),
+            "servings_per_container": p.get('servings_per_container', 60),
+            "ingredients": p.get('ingredients', {"lutein": "20mg", "zeaxanthin": "4mg"}),
+            "product_url": (p.get('url') or p.get('product_url') or '').strip(),
             "rating_avg": p.get('rating_avg') or 0,
             "rating_count": p.get('rating_count') or 0,
-            "category": p.get('category', '')
+            "category": (p.get('category') or '').strip()
         })
+    
+    if not formatted:
+        print(f"경고: 카테고리 '{category}'에 포맷팅된 제품이 없습니다")
+    
     return formatted
 
 
@@ -383,27 +399,83 @@ def _empty_checklist() -> Dict:
 
 
 def generate_ai_analysis(product: Dict, checklist: Dict) -> Dict:
-    """AI 약사의 분석 결과 생성"""
-    trust_score = sum(c["rate"] for c in checklist.values()) / len(checklist) * 100
-
+    """AI 약사의 분석 결과 생성 (안전한 방식)"""
+    
+    # 입력 검증
+    if not product or not isinstance(product, dict):
+        print("경고: product 데이터가 유효하지 않습니다")
+        return _empty_ai_analysis()
+    
+    if not checklist or not isinstance(checklist, dict):
+        print("경고: checklist 데이터가 유효하지 않습니다")
+        checklist = {}
+    
+    # 체크리스트 점수 계산 (안전한 방식)
+    try:
+        valid_rates = []
+        for key, item in checklist.items():
+            if isinstance(item, dict):
+                rate = item.get("rate")
+                if isinstance(rate, (int, float)):
+                    valid_rates.append(rate)
+        
+        if valid_rates:
+            trust_score = sum(valid_rates) / len(valid_rates) * 100
+        else:
+            trust_score = 0
+    except Exception as e:
+        print(f"체크리스트 계산 오류: {str(e)}")
+        trust_score = 0
+    
+    # 신뢰도 등급 결정
     if trust_score >= 70:
         trust_level = "high"
-        summary = f"{product['brand']} {product['name'][:30]}...는 신뢰도 높은 제품입니다. 리뷰 분석 결과 인증 구매 비율이 높고, 광고성 리뷰 비율이 낮습니다."
     elif trust_score >= 50:
         trust_level = "medium"
-        summary = f"{product['brand']} {product['name'][:30]}...는 중간 수준의 신뢰도를 보입니다. 일부 지표에서 개선이 필요하지만 전반적으로 무난한 제품입니다."
     else:
         trust_level = "low"
-        summary = f"{product['brand']} {product['name'][:30]}...는 신뢰도가 낮은 편입니다. 광고성 리뷰 비율이 높거나 검증된 구매 비율이 낮습니다."
-
+    
+    # 요약 생성 (안전한 방식)
+    brand = product.get('brand', 'Unknown').strip()
+    name = (product.get('name') or product.get('title') or 'Unknown').strip()
+    name_short = name[:30] if name else 'Unknown'
+    
+    if trust_level == "high":
+        summary = f"{brand} {name_short}...는 신뢰도 높은 제품입니다. 리뷰 분석 결과 인증 구매 비율이 높고, 광고성 리뷰 비율이 낮습니다."
+    elif trust_level == "medium":
+        summary = f"{brand} {name_short}...는 중간 수준의 신뢰도를 보입니다. 일부 지표에서 개선이 필요하지만 전반적으로 무난한 제품입니다."
+    else:
+        summary = f"{brand} {name_short}...는 신뢰도가 낮은 편입니다. 광고성 리뷰 비율이 높거나 검증된 구매 비율이 낮습니다."
+    
+    # 영양소 정보 추출 (안전한 방식)
+    ingredients = product.get('ingredients', {})
+    if not isinstance(ingredients, dict):
+        ingredients = {}
+    
+    lutein = ingredients.get('lutein', '20mg')
+    zeaxanthin = ingredients.get('zeaxanthin', '4mg')
+    
     return {
         "trust_score": round(trust_score, 1),
         "trust_level": trust_level,
         "summary": summary,
-        "efficacy": f"루테인 {product['ingredients'].get('lutein', '20mg')} 함유. 눈 건강 유지 및 황반색소 밀도 개선에 도움을 줄 수 있습니다.",
-        "side_effects": "일반적으로 안전하나, 드물게 소화불량이나 알레르기 반응이 나타날 수 있습니다.",
+        "efficacy": f"루테인 {lutein} 함유. 눈 건강 유지 및 황반색소 밀도 개선에 도움을 줄 수 있습니다. 제아잔틴 {zeaxanthin} 추가 함유로 시너지 효과 기대.",
+        "side_effects": "일반적으로 안전하나, 드물게 소화불량이나 알레르기 반응이 나타날 수 있습니다. 과량 섭취 시 피부가 노랗게 변할 수 있으니 권장량을 준수하세요.",
         "recommendations": "하루 1회, 식사와 함께 복용하면 흡수율이 높아집니다. 최소 3개월 이상 꾸준히 복용해야 효과를 체감할 수 있습니다.",
-        "warnings": "임신부, 수유부는 복용 전 의사와 상담하세요."
+        "warnings": "임신부, 수유부는 복용 전 의사와 상담하세요. 다른 눈 건강 보조제와 중복 복용 시 과량 섭취에 주의하세요."
+    }
+
+
+def _empty_ai_analysis() -> Dict:
+    """빈 AI 분석 결과 반환"""
+    return {
+        "trust_score": 0,
+        "trust_level": "low",
+        "summary": "분석 불가능한 제품입니다.",
+        "efficacy": "정보 없음",
+        "side_effects": "정보 없음",
+        "recommendations": "정보 없음",
+        "warnings": "정보 없음"
     }
 
 
