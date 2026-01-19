@@ -813,7 +813,7 @@ def main():
     categories = get_cached_categories() or []
     brands = sorted(list(set(p.get("brand", "") for p in all_products_list if p.get("brand") and p.get("brand")))) if all_products_list else []
     
-    # ========== 사이드바: 개선된 3탭 구조 ==========
+    # ========== 사이드바: 수직 정렬 구조 ==========
     with st.sidebar:
         # Supabase 연결 상태
         if USE_SUPABASE:
@@ -821,200 +821,199 @@ def main():
         else:
             st.warning("⚠️ 목업 데이터")
 
-        # 3개 탭 (기능 통합)
-        sidebar_tab1, sidebar_tab2, sidebar_tab3 = st.tabs([
-            "🔍 검색 & 필터",
-            "📊 통계",
-            "⚙️ 설정"
-        ])
+        st.markdown("---")
 
-        # ========== 탭 1: 검색 & 필터 ==========
-        with sidebar_tab1:
-            # 1. 검색창 (최상단 배치)
-            st.markdown("### 🔎 검색")
-            search_query = st.text_input(
-                "제품 검색",
-                placeholder="예: NOW Foods, Lutein...",
-                key="search_query",
-                label_visibility="collapsed"
+        # ========== 제품 선택 (수직 배치) ==========
+        # 1. 검색창 (최상단 배치)
+        st.markdown("### 🔎 검색")
+        search_query = st.text_input(
+            "제품 검색",
+            placeholder="예: NOW Foods, Lutein...",
+            key="search_query",
+            label_visibility="collapsed"
+        )
+
+        st.markdown("---")
+
+        # 2. 제품 선택 (필수)
+        st.markdown("### 📦 제품 선택")
+        selected_labels = st.multiselect(
+            "분석할 제품을 선택하세요",
+            options=list(product_options.keys()),
+            default=list(product_options.keys())[:3],
+            key="product_select"
+        )
+
+        # 빠른 선택 버튼
+        col_q1, col_q2 = st.columns(2)
+        with col_q1:
+            if st.button("상위 3개", use_container_width=True, key="quick_top3"):
+                st.session_state.product_select = list(product_options.keys())[:3]
+                st.rerun()
+        with col_q2:
+            if st.button("전체 선택", use_container_width=True, key="quick_all"):
+                st.session_state.product_select = list(product_options.keys())
+                st.rerun()
+
+        st.markdown("---")
+
+        # ========== Supabase 필터 (수직 배치) ==========
+        st.markdown("### ⚙️ Supabase 필터")
+
+        # 3. 기본 필터 (기본 펼침)
+        with st.expander("📂 기본 필터", expanded=True):
+            # 카테고리
+            if categories:
+                category_filter = st.multiselect(
+                    "📂 카테고리",
+                    options=categories,
+                    default=categories,
+                    key="category_filter"
+                )
+            else:
+                category_filter = []
+
+            # 브랜드
+            if not brands and all_products_list:
+                brands = sorted(list(set(p.get("brand", "") for p in all_products_list if p.get("brand") and p.get("brand"))))
+            if brands:
+                brand_filter = st.multiselect(
+                    "🏷️ 브랜드",
+                    options=brands,
+                    default=brands,
+                    key="brand_filter"
+                )
+            else:
+                brand_filter = []
+
+            # 신뢰도
+            trust_filter = st.multiselect(
+                "🎯 신뢰도 등급",
+                options=["HIGH", "MEDIUM", "LOW"],
+                default=["HIGH", "MEDIUM", "LOW"],
+                key="trust_filter"
             )
 
-            st.markdown("---")
+        # 4. 고급 필터 (기본 접힘)
+        with st.expander("⚙️ 고급 필터", expanded=False):
+            # 가격 범위
+            if all_products_list:
+                prices = [p.get("price", 0) for p in all_products_list if p.get("price") and p.get("price") > 0]
+                if prices:
+                    price_range = st.slider(
+                        "💰 가격 범위 ($)",
+                        min_value=float(min(prices)),
+                        max_value=float(max(prices)),
+                        value=(float(min(prices)), float(max(prices))),
+                        key="price_range"
+                    )
 
-            # 2. 제품 선택 (필수)
-            st.markdown("### 📦 제품 선택")
-            selected_labels = st.multiselect(
-                "분석할 제품을 선택하세요",
-                options=list(product_options.keys()),
-                default=list(product_options.keys())[:3],
-                key="product_select"
+            # 평점 범위
+            if all_products_list:
+                ratings = [p.get("rating_avg", 0) for p in all_products_list if p.get("rating_avg") and p.get("rating_avg") > 0]
+                if ratings:
+                    rating_range = st.slider(
+                        "⭐ 평점 범위",
+                        min_value=float(min(ratings)),
+                        max_value=float(max(ratings)),
+                        value=(float(min(ratings)), float(max(ratings))),
+                        step=0.1,
+                        key="rating_range"
+                    )
+
+            # 리뷰 수
+            if all_products_list:
+                review_counts = [p.get("rating_count", 0) for p in all_products_list if p.get("rating_count")]
+                if review_counts:
+                    review_count_range = st.slider(
+                        "💬 리뷰 수 범위",
+                        min_value=int(min(review_counts)),
+                        max_value=int(max(review_counts)),
+                        value=(int(min(review_counts)), int(max(review_counts))),
+                        key="review_count_range"
+                    )
+
+            # 날짜 필터
+            st.markdown("**📅 리뷰 날짜**")
+            col_date1, col_date2 = st.columns(2)
+            with col_date1:
+                start_date = st.date_input("시작일", value=None, key="review_start_date")
+            with col_date2:
+                end_date = st.date_input("종료일", value=None, key="review_end_date")
+
+            # 언어 필터
+            language_filter = st.multiselect(
+                "🌐 리뷰 언어",
+                options=["ko", "en", "all"],
+                default=["all"],
+                key="language_filter"
             )
 
-            # 빠른 선택 버튼
-            col_q1, col_q2 = st.columns(2)
-            with col_q1:
-                if st.button("상위 3개", use_container_width=True, key="quick_top3"):
-                    st.session_state.product_select = list(product_options.keys())[:3]
-                    st.rerun()
-            with col_q2:
-                if st.button("전체 선택", use_container_width=True, key="quick_all"):
-                    st.session_state.product_select = list(product_options.keys())
-                    st.rerun()
+        st.markdown("---")
 
+        # 5. 활성 필터 요약 (시각적 강조)
+        active_filters = []
+        if st.session_state.get('search_query', ''):
+            active_filters.append(f"검색: {st.session_state.search_query}")
+        if st.session_state.get('category_filter') and len(st.session_state.category_filter) < len(categories or []):
+            active_filters.append(f"카테고리: {len(st.session_state.category_filter)}개")
+        if st.session_state.get('brand_filter') and len(st.session_state.brand_filter) < len(brands or []):
+            active_filters.append(f"브랜드: {len(st.session_state.brand_filter)}개")
+        if st.session_state.get('trust_filter') and len(st.session_state.trust_filter) < 3:
+            active_filters.append(f"신뢰도: {', '.join(st.session_state.trust_filter)}")
+
+        if active_filters:
+            st.markdown(f"""
+            <div style="background: #FEF3C7; border-left: 4px solid #F59E0B; padding: 0.75rem; border-radius: 6px; margin-bottom: 1rem;">
+                <p style="margin: 0; font-weight: 600; color: #92400E; font-size: 0.9rem;">
+                    🔍 활성 필터: {len(active_filters)}개
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
+            for f in active_filters:
+                st.caption(f"• {f}")
             st.markdown("---")
 
-            # 3. 기본 필터 (기본 펼침)
-            with st.expander("📂 기본 필터", expanded=True):
-                # 카테고리
-                if categories:
-                    category_filter = st.multiselect(
-                        "📂 카테고리",
-                        options=categories,
-                        default=categories,
-                        key="category_filter"
-                    )
-                else:
-                    category_filter = []
+        # 6. 필터 관리 버튼 (3개 버튼)
+        col_btn1, col_btn2, col_btn3 = st.columns(3)
+        with col_btn1:
+            if st.button("🔄", help="초기화", use_container_width=True, key="reset_filters"):
+                safe_categories = categories if (categories is not None and isinstance(categories, list)) else []
+                safe_brands = brands if (brands is not None and isinstance(brands, list)) else []
+                safe_products = all_products_list if (all_products_list is not None and isinstance(all_products_list, list)) else []
+                reset_all_filters(safe_products, safe_categories, safe_brands)
+                st.rerun()
 
-                # 브랜드
-                if not brands and all_products_list:
-                    brands = sorted(list(set(p.get("brand", "") for p in all_products_list if p.get("brand") and p.get("brand"))))
-                if brands:
-                    brand_filter = st.multiselect(
-                        "🏷️ 브랜드",
-                        options=brands,
-                        default=brands,
-                        key="brand_filter"
-                    )
-                else:
-                    brand_filter = []
+        with col_btn2:
+            if st.button("💾", help="저장", use_container_width=True, key="save_filters"):
+                current_filters = {
+                    'category_filter': st.session_state.get('category_filter', []),
+                    'brand_filter': st.session_state.get('brand_filter', []),
+                    'price_range': st.session_state.get('price_range', None),
+                    'rating_range': st.session_state.get('rating_range', None),
+                    'review_count_range': st.session_state.get('review_count_range', None),
+                    'trust_filter': st.session_state.get('trust_filter', []),
+                    'search_query': st.session_state.get('search_query', ''),
+                    'review_start_date': st.session_state.get('review_start_date', None),
+                    'review_end_date': st.session_state.get('review_end_date', None),
+                    'language_filter': st.session_state.get('language_filter', ['all'])
+                }
+                save_filter_state_to_history(current_filters)
+                st.toast("필터 저장 완료!", icon="✅")
 
-                # 신뢰도
-                trust_filter = st.multiselect(
-                    "🎯 신뢰도 등급",
-                    options=["HIGH", "MEDIUM", "LOW"],
-                    default=["HIGH", "MEDIUM", "LOW"],
-                    key="trust_filter"
-                )
+        with col_btn3:
+            if 'filter_history' in st.session_state and len(st.session_state.filter_history) > 0:
+                if st.button("↩️", help="되돌리기", use_container_width=True, key="undo_filters"):
+                    previous_state = restore_filter_state_from_history()
+                    if previous_state:
+                        for key, value in previous_state.items():
+                            st.session_state[key] = value
+                        st.rerun()
 
-            # 4. 고급 필터 (기본 접힘)
-            with st.expander("⚙️ 고급 필터", expanded=False):
-                # 가격 범위
-                if all_products_list:
-                    prices = [p.get("price", 0) for p in all_products_list if p.get("price") and p.get("price") > 0]
-                    if prices:
-                        price_range = st.slider(
-                            "💰 가격 범위 ($)",
-                            min_value=float(min(prices)),
-                            max_value=float(max(prices)),
-                            value=(float(min(prices)), float(max(prices))),
-                            key="price_range"
-                        )
+        st.markdown("---")
 
-                # 평점 범위
-                if all_products_list:
-                    ratings = [p.get("rating_avg", 0) for p in all_products_list if p.get("rating_avg") and p.get("rating_avg") > 0]
-                    if ratings:
-                        rating_range = st.slider(
-                            "⭐ 평점 범위",
-                            min_value=float(min(ratings)),
-                            max_value=float(max(ratings)),
-                            value=(float(min(ratings)), float(max(ratings))),
-                            step=0.1,
-                            key="rating_range"
-                        )
-
-                # 리뷰 수
-                if all_products_list:
-                    review_counts = [p.get("rating_count", 0) for p in all_products_list if p.get("rating_count")]
-                    if review_counts:
-                        review_count_range = st.slider(
-                            "💬 리뷰 수 범위",
-                            min_value=int(min(review_counts)),
-                            max_value=int(max(review_counts)),
-                            value=(int(min(review_counts)), int(max(review_counts))),
-                            key="review_count_range"
-                        )
-
-                # 날짜 필터
-                st.markdown("**📅 리뷰 날짜**")
-                col_date1, col_date2 = st.columns(2)
-                with col_date1:
-                    start_date = st.date_input("시작일", value=None, key="review_start_date")
-                with col_date2:
-                    end_date = st.date_input("종료일", value=None, key="review_end_date")
-
-                # 언어 필터
-                language_filter = st.multiselect(
-                    "🌐 리뷰 언어",
-                    options=["ko", "en", "all"],
-                    default=["all"],
-                    key="language_filter"
-                )
-
-            st.markdown("---")
-
-            # 5. 활성 필터 요약 (시각적 강조)
-            active_filters = []
-            if st.session_state.get('search_query', ''):
-                active_filters.append(f"검색: {st.session_state.search_query}")
-            if st.session_state.get('category_filter') and len(st.session_state.category_filter) < len(categories or []):
-                active_filters.append(f"카테고리: {len(st.session_state.category_filter)}개")
-            if st.session_state.get('brand_filter') and len(st.session_state.brand_filter) < len(brands or []):
-                active_filters.append(f"브랜드: {len(st.session_state.brand_filter)}개")
-            if st.session_state.get('trust_filter') and len(st.session_state.trust_filter) < 3:
-                active_filters.append(f"신뢰도: {', '.join(st.session_state.trust_filter)}")
-
-            if active_filters:
-                st.markdown(f"""
-                <div style="background: #FEF3C7; border-left: 4px solid #F59E0B; padding: 0.75rem; border-radius: 6px; margin-bottom: 1rem;">
-                    <p style="margin: 0; font-weight: 600; color: #92400E; font-size: 0.9rem;">
-                        🔍 활성 필터: {len(active_filters)}개
-                    </p>
-                </div>
-                """, unsafe_allow_html=True)
-                for f in active_filters:
-                    st.caption(f"• {f}")
-                st.markdown("---")
-
-            # 6. 필터 관리 버튼 (3개 버튼)
-            col_btn1, col_btn2, col_btn3 = st.columns(3)
-            with col_btn1:
-                if st.button("🔄", help="초기화", use_container_width=True, key="reset_filters"):
-                    safe_categories = categories if (categories is not None and isinstance(categories, list)) else []
-                    safe_brands = brands if (brands is not None and isinstance(brands, list)) else []
-                    safe_products = all_products_list if (all_products_list is not None and isinstance(all_products_list, list)) else []
-                    reset_all_filters(safe_products, safe_categories, safe_brands)
-                    st.rerun()
-
-            with col_btn2:
-                if st.button("💾", help="저장", use_container_width=True, key="save_filters"):
-                    current_filters = {
-                        'category_filter': st.session_state.get('category_filter', []),
-                        'brand_filter': st.session_state.get('brand_filter', []),
-                        'price_range': st.session_state.get('price_range', None),
-                        'rating_range': st.session_state.get('rating_range', None),
-                        'review_count_range': st.session_state.get('review_count_range', None),
-                        'trust_filter': st.session_state.get('trust_filter', []),
-                        'search_query': st.session_state.get('search_query', ''),
-                        'review_start_date': st.session_state.get('review_start_date', None),
-                        'review_end_date': st.session_state.get('review_end_date', None),
-                        'language_filter': st.session_state.get('language_filter', ['all'])
-                    }
-                    save_filter_state_to_history(current_filters)
-                    st.toast("필터 저장 완료!", icon="✅")
-
-            with col_btn3:
-                if 'filter_history' in st.session_state and len(st.session_state.filter_history) > 0:
-                    if st.button("↩️", help="되돌리기", use_container_width=True, key="undo_filters"):
-                        previous_state = restore_filter_state_from_history()
-                        if previous_state:
-                            for key, value in previous_state.items():
-                                st.session_state[key] = value
-                            st.rerun()
-
-        # ========== 탭 2: 통계 & 인사이트 ==========
-        with sidebar_tab2:
+        # ========== 통계 & 인사이트 (수직 배치) ==========
+        with st.expander("📊 실시간 통계", expanded=False):
             st.markdown("### 📊 실시간 통계")
 
             try:
@@ -1070,12 +1069,13 @@ def main():
                 st.metric("리뷰 수", f"{total_reviews}개")
                 st.metric("평균 신뢰도", f"{avg_trust:.1f}점")
 
-        # ========== 탭 3: 설정 ==========
-        with sidebar_tab3:
-            st.markdown("### ⚙️ 설정")
+        st.markdown("---")
+
+        # ========== 설정 (수직 배치) ==========
+        with st.expander("⚙️ 설정", expanded=False):
 
             # 필터 프리셋
-            st.markdown("#### 💾 필터 프리셋")
+            st.markdown("### 💾 필터 프리셋")
             preset = st.selectbox(
                 "빠른 필터 적용",
                 ["선택 안함", "고신뢰도 제품만", "가성비 우선", "리뷰 많은 제품"],
@@ -1411,9 +1411,36 @@ def main():
                 key="table_sort"
             )
 
-        comparison_df = render_comparison_table(selected_data)
+        # 안전한 DataFrame 생성 및 검증
+        try:
+            comparison_df = render_comparison_table(selected_data)
+        except Exception as e:
+            st.error(f"비교표 생성 중 오류가 발생했습니다: {str(e)}")
+            import traceback
+            with st.expander("상세 오류 정보"):
+                st.code(traceback.format_exc())
+            return
 
-        # 정렬 적용
+        # DataFrame 유효성 검증
+        if comparison_df is None:
+            st.warning("비교할 데이터가 없습니다.")
+            return
+        
+        if not isinstance(comparison_df, pd.DataFrame):
+            st.error(f"예상치 못한 데이터 형식입니다: {type(comparison_df)}")
+            return
+
+        # 빈 DataFrame 체크
+        if comparison_df.empty or len(comparison_df) == 0:
+            st.warning("비교할 데이터가 없습니다.")
+            return
+
+        # 컬럼 존재 여부 확인
+        if not hasattr(comparison_df, 'columns') or comparison_df.columns is None:
+            st.error("DataFrame에 컬럼 정보가 없습니다.")
+            return
+
+        # 정렬 적용 (완전히 안전한 버전)
         sort_map = {
             "신뢰도 높은순": ("신뢰도", False),
             "신뢰도 낮은순": ("신뢰도", True),
@@ -1424,28 +1451,69 @@ def main():
         }
         sort_column, ascending = sort_map.get(sort_by, ("신뢰도", False))
 
-        # 안전한 숫자 변환 및 정렬
-        if sort_column in comparison_df.columns:
-            comparison_df["_sort_key"] = comparison_df[sort_column].apply(safe_parse_value)
-            comparison_df = comparison_df.sort_values("_sort_key", ascending=ascending).drop(columns=["_sort_key"])
+        # 안전한 숫자 변환 및 정렬 (다중 레벨 보호)
+        try:
+            # 컬럼 존재 여부를 여러 방법으로 확인
+            columns_list = list(comparison_df.columns) if hasattr(comparison_df, 'columns') else []
+            
+            if not columns_list:
+                st.warning("비교표에 컬럼이 없습니다. 원본 순서로 표시합니다.")
+            elif sort_column not in columns_list:
+                # 컬럼이 없을 경우 경고 메시지 표시
+                available_columns = ", ".join(columns_list)
+                st.warning(f"정렬 컬럼 '{sort_column}'을 찾을 수 없습니다. 사용 가능한 컬럼: {available_columns}")
+            else:
+                # 정렬 실행
+                try:
+                    # _sort_key 컬럼 생성 시도
+                    if sort_column in comparison_df.columns:
+                        comparison_df = comparison_df.copy()  # 원본 보호를 위한 복사
+                        comparison_df["_sort_key"] = comparison_df[sort_column].apply(safe_parse_value)
+                        comparison_df = comparison_df.sort_values("_sort_key", ascending=ascending)
+                        # _sort_key 컬럼이 존재하는지 확인 후 삭제
+                        if "_sort_key" in comparison_df.columns:
+                            comparison_df = comparison_df.drop(columns=["_sort_key"])
+                except KeyError as ke:
+                    st.warning(f"정렬 컬럼 접근 오류: {str(ke)}. 원본 순서로 표시합니다.")
+                except Exception as e:
+                    st.warning(f"정렬 중 오류가 발생했습니다: {str(e)}. 원본 순서로 표시합니다.")
+        except Exception as e:
+            st.warning(f"정렬 로직 실행 중 예상치 못한 오류가 발생했습니다: {str(e)}. 원본 순서로 표시합니다.")
+            import traceback
+            with st.expander("상세 오류 정보"):
+                st.code(traceback.format_exc())
 
         # ========== Quick Win #3: 신뢰도별 행 배경색 ==========
-        def highlight_trust_row(row):
-            """신뢰도에 따른 행 하이라이트 (안전한 버전)"""
+        if not comparison_df.empty:
+            def highlight_trust_row(row):
+                """신뢰도에 따른 행 하이라이트 (안전한 버전)"""
+                try:
+                    # row가 Series인 경우와 dict-like인 경우 모두 처리
+                    if hasattr(row, 'get'):
+                        trust_val = safe_parse_value(row.get("신뢰도", 0))
+                    elif "신뢰도" in row.index:
+                        trust_val = safe_parse_value(row["신뢰도"])
+                    else:
+                        trust_val = 0
+                except (KeyError, TypeError, AttributeError, IndexError):
+                    trust_val = 0
+
+                row_len = len(row) if hasattr(row, '__len__') else 10  # 기본값
+                if trust_val >= 70:
+                    return ['background-color: #dcfce7'] * row_len
+                elif trust_val >= 50:
+                    return ['background-color: #fef3c7'] * row_len
+                else:
+                    return ['background-color: #fee2e2'] * row_len
+
             try:
-                trust_val = safe_parse_value(row.get("신뢰도", 0))
-            except (KeyError, TypeError, AttributeError):
-                trust_val = 0
-
-            if trust_val >= 70:
-                return ['background-color: #dcfce7'] * len(row)
-            elif trust_val >= 50:
-                return ['background-color: #fef3c7'] * len(row)
-            else:
-                return ['background-color: #fee2e2'] * len(row)
-
-        styled_df = comparison_df.style.apply(highlight_trust_row, axis=1)
-        st.dataframe(styled_df, use_container_width=True, hide_index=True, height=400)
+                styled_df = comparison_df.style.apply(highlight_trust_row, axis=1)
+                st.dataframe(styled_df, use_container_width=True, hide_index=True, height=400)
+            except Exception as e:
+                st.warning(f"테이블 스타일 적용 중 오류가 발생했습니다: {str(e)}")
+                st.dataframe(comparison_df, use_container_width=True, hide_index=True, height=400)
+        else:
+            st.info("비교할 제품 데이터가 없습니다.")
     
     # 탭 2: AI 제품별 정밀 진단
     with tab2:

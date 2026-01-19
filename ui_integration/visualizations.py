@@ -106,43 +106,143 @@ def render_trust_badge(level):
 
 
 def render_comparison_table(products_data):
-    """제품 비교 테이블 생성"""
-    table_data = []
+    """제품 비교 테이블 생성 (완전히 안전한 버전)"""
+    # 기본 컬럼 정의 (항상 동일한 컬럼 구조 보장)
+    default_columns = [
+        "제품명", "신뢰도", "등급", "가격 ($)", "리뷰 수", 
+        "평균 평점", "인증 구매", "재구매율", "1개월+ 사용", "광고 의심률"
+    ]
     
-    for data in products_data:
-        product = data.get("product", {})
-        ai_result = data.get("ai_result", {})
-        reviews = data.get("reviews", [])
-        checklist = data.get("checklist_results", {})
+    try:
+        # 빈 데이터 체크
+        if not products_data:
+            return pd.DataFrame(columns=default_columns)
         
-        # 통계 계산
-        total_reviews = len(reviews)
-        verified_count = sum(1 for r in reviews if r.get("verified", False))
-        reorder_count = sum(1 for r in reviews if r.get("reorder", False))
-        one_month_count = sum(1 for r in reviews if r.get("one_month_use", False))
-        avg_rating = sum(r.get("rating", 5) for r in reviews) / total_reviews if total_reviews > 0 else 0
+        if not isinstance(products_data, list):
+            return pd.DataFrame(columns=default_columns)
         
-        # 광고 의심률
-        ad_suspected = sum(
-            1 for r in reviews
-            if r.get("rating") == 5 and not r.get("one_month_use") and len(r.get("text", "")) < 100
-        )
-        ad_rate = (ad_suspected / total_reviews * 100) if total_reviews > 0 else 0
+        if len(products_data) == 0:
+            return pd.DataFrame(columns=default_columns)
         
-        table_data.append({
-            "제품명": f"{product.get('brand', '')} {product.get('name', '')}",
-            "신뢰도": f"{ai_result.get('trust_score', 0):.1f}",
-            "등급": ai_result.get('trust_level', 'medium').upper(),
-            "가격 ($)": f"{product.get('price', 0):.2f}",
-            "리뷰 수": f"{total_reviews}개",
-            "평균 평점": f"{avg_rating:.1f}/5",
-            "인증 구매": f"{verified_count/total_reviews*100:.1f}%" if total_reviews > 0 else "0%",
-            "재구매율": f"{reorder_count/total_reviews*100:.1f}%" if total_reviews > 0 else "0%",
-            "1개월+ 사용": f"{one_month_count/total_reviews*100:.1f}%" if total_reviews > 0 else "0%",
-            "광고 의심률": f"{ad_rate:.1f}%"
-        })
-    
-    return pd.DataFrame(table_data)
+        table_data = []
+        
+        for idx, data in enumerate(products_data):
+            try:
+                # 안전한 데이터 접근
+                if not isinstance(data, dict):
+                    continue
+                    
+                product = data.get("product", {})
+                ai_result = data.get("ai_result", {})
+                reviews = data.get("reviews", [])
+                checklist = data.get("checklist_results", {})
+                
+                # 안전한 타입 검증
+                if not isinstance(product, dict):
+                    product = {}
+                if not isinstance(ai_result, dict):
+                    ai_result = {}
+                if not isinstance(reviews, list):
+                    reviews = []
+                if not isinstance(checklist, dict):
+                    checklist = {}
+                
+                # 안전한 통계 계산
+                total_reviews = len(reviews)
+                
+                verified_count = 0
+                reorder_count = 0
+                one_month_count = 0
+                rating_sum = 0
+                rating_count = 0
+                
+                for r in reviews:
+                    if isinstance(r, dict):
+                        if r.get("verified", False):
+                            verified_count += 1
+                        if r.get("reorder", False):
+                            reorder_count += 1
+                        if r.get("one_month_use", False):
+                            one_month_count += 1
+                        rating = r.get("rating", 0)
+                        if isinstance(rating, (int, float)) and 1 <= rating <= 5:
+                            rating_sum += rating
+                            rating_count += 1
+                
+                avg_rating = rating_sum / rating_count if rating_count > 0 else 0
+                
+                # 광고 의심률
+                ad_suspected = 0
+                for r in reviews:
+                    if isinstance(r, dict):
+                        rating = r.get("rating", 0)
+                        one_month = r.get("one_month_use", False)
+                        text = str(r.get("text", ""))
+                        if rating == 5 and not one_month and len(text) < 100:
+                            ad_suspected += 1
+                
+                ad_rate = (ad_suspected / total_reviews * 100) if total_reviews > 0 else 0
+                
+                # 안전한 값 추출 및 포맷팅
+                brand = str(product.get('brand', '')).strip()
+                name = str(product.get('name', '')).strip()
+                product_name = f"{brand} {name}".strip() if brand or name else "Unknown"
+                
+                trust_score = ai_result.get('trust_score', 0)
+                try:
+                    trust_score = float(trust_score) if trust_score is not None else 0.0
+                except (ValueError, TypeError):
+                    trust_score = 0.0
+                
+                trust_level = str(ai_result.get('trust_level', 'medium')).upper()
+                
+                price = product.get('price', 0)
+                try:
+                    price = float(price) if price is not None else 0.0
+                except (ValueError, TypeError):
+                    price = 0.0
+                
+                table_data.append({
+                    "제품명": product_name,
+                    "신뢰도": f"{trust_score:.1f}",
+                    "등급": trust_level,
+                    "가격 ($)": f"{price:.2f}",
+                    "리뷰 수": f"{total_reviews}개",
+                    "평균 평점": f"{avg_rating:.1f}/5",
+                    "인증 구매": f"{verified_count/total_reviews*100:.1f}%" if total_reviews > 0 else "0%",
+                    "재구매율": f"{reorder_count/total_reviews*100:.1f}%" if total_reviews > 0 else "0%",
+                    "1개월+ 사용": f"{one_month_count/total_reviews*100:.1f}%" if total_reviews > 0 else "0%",
+                    "광고 의심률": f"{ad_rate:.1f}%"
+                })
+            except Exception as e:
+                # 개별 제품 처리 중 오류 발생 시 해당 제품만 스킵
+                import traceback
+                print(f"[WARNING] 제품 {idx} 처리 중 오류 발생: {str(e)}")
+                continue
+        
+        # 빈 리스트인 경우 빈 DataFrame 반환 (컬럼 구조는 유지)
+        if not table_data:
+            return pd.DataFrame(columns=default_columns)
+        
+        # DataFrame 생성 및 검증
+        df = pd.DataFrame(table_data)
+        
+        # 컬럼이 모두 존재하는지 확인
+        for col in default_columns:
+            if col not in df.columns:
+                df[col] = ""  # 누락된 컬럼 추가
+        
+        # 불필요한 컬럼 제거 (기본 컬럼만 유지)
+        df = df[default_columns]
+        
+        return df
+        
+    except Exception as e:
+        # 전체 함수 실행 중 예상치 못한 오류 발생 시 빈 DataFrame 반환
+        import traceback
+        print(f"[ERROR] render_comparison_table 실행 중 오류: {str(e)}")
+        print(traceback.format_exc())
+        return pd.DataFrame(columns=default_columns)
 
 
 def render_review_sentiment_chart(reviews):
