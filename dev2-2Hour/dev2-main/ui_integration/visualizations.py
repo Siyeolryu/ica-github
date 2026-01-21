@@ -458,16 +458,16 @@ class ComparisonTableRenderer:
             ad_rate = (ad_suspected / total_reviews * 100) if total_reviews > 0 else 0
             
             return {
-                "Product": f"{product.get('brand', '')} {product.get('name', '')}",
-                "Reliability": f"{ai_result.get('trust_score', 0):.1f}",
-                "Grade": ai_result.get('trust_level', 'medium').upper(),
-                "Price ($)": f"{product.get('price', 0):.2f}",
-                "Reviews": f"{total_reviews}",
-                "Avg Rating": f"{avg_rating:.1f}/5",
-                "Verified": f"{verified_count/total_reviews*100:.1f}%",
-                "Repurchase": f"{reorder_count/total_reviews*100:.1f}%",
-                "1 Month+": f"{one_month_count/total_reviews*100:.1f}%",
-                "Ad Suspicion": f"{ad_rate:.1f}%"
+                "제품명": f"{product.get('brand', '')} {product.get('name', '')}",
+                "신뢰도": f"{ai_result.get('trust_score', 0):.1f}",
+                "등급": ai_result.get('trust_level', 'medium').upper(),
+                "가격 ($)": f"{product.get('price', 0):.2f}",
+                "리뷰 수": f"{total_reviews}",
+                "평균 평점": f"{avg_rating:.1f}/5",
+                "인증됨": f"{verified_count/total_reviews*100:.1f}%",
+                "재구매율": f"{reorder_count/total_reviews*100:.1f}%",
+                "한달 사용": f"{one_month_count/total_reviews*100:.1f}%",
+                "광고 의심": f"{ad_rate:.1f}%"
             }
         except Exception:
             return None
