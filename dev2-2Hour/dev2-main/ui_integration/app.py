@@ -126,19 +126,9 @@ def render_chart_with_ai_analysis(chart_func, chart_data, chart_type: str, chart
                             f"{title} 점수: {score}"
                         )
                     elif chart_type == "bar":
-                        # 가격 비교 차트
+                        # 가격 비교 차트 - 전용 가격 분석 사용
                         if isinstance(chart_data, list) and len(chart_data) > 0 and isinstance(chart_data[0], dict):
-                            products_summary = {
-                                "products": [
-                                    {
-                                        "name": f"{d.get('product', {}).get('brand', '')} {d.get('product', {}).get('name', '')}",
-                                        "price": d.get('product', {}).get('price', 0),
-                                        "trust_score": d.get('ai_result', {}).get('trust_score', 0)
-                                    }
-                                    for d in chart_data
-                                ]
-                            }
-                            analysis = analyzer.analyze_chart_data("bar", products_summary, "가격 및 신뢰도 비교")
+                            analysis = analyzer.analyze_comparison_chart(chart_data, "price")
                         else:
                             analysis = analyzer.analyze_chart_data("bar", {"data": str(chart_data)})
                     else:
@@ -168,7 +158,17 @@ def render_chart_with_ai_analysis(chart_func, chart_data, chart_type: str, chart
                     
                     st.markdown("#### 💡 인사이트")
                     st.warning(analysis.get('insights', 'N/A'))
-                    
+
+                    # 최고 추천 제품 표시 (레이더 차트)
+                    if analysis.get('best_product'):
+                        st.markdown("#### 🏆 최고 추천 제품")
+                        st.success(f"**{analysis.get('best_product')}**")
+
+                    # 최고 가성비 제품 표시 (가격 비교 차트)
+                    if analysis.get('best_value'):
+                        st.markdown("#### 💰 최고 가성비 제품")
+                        st.success(f"**{analysis.get('best_value')}**")
+
                     st.markdown(f"**데이터 품질**: {analysis.get('data_quality', 'N/A')}")
                     
                 except Exception as e:
