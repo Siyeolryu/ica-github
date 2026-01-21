@@ -137,21 +137,118 @@ def validate_review_data(review: Dict[str, Any]) -> bool:
 def safe_render_html(html_content: str, allow_script: bool = False) -> str:
     """
     안전한 HTML 렌더링 (스크립트 태그 제거)
-    
+
     Args:
         html_content: HTML 내용
         allow_script: 스크립트 허용 여부 (기본값: False, 보안상 권장하지 않음)
-        
+
     Returns:
         str: 안전한 HTML 내용
     """
     if not html_content:
         return ""
-    
+
     # 스크립트 태그 제거 (보안)
     if not allow_script:
         import re
         html_content = re.sub(r'<script[^>]*>.*?</script>', '', html_content, flags=re.IGNORECASE | re.DOTALL)
         html_content = re.sub(r'on\w+\s*=', '', html_content, flags=re.IGNORECASE)  # 이벤트 핸들러 제거
-    
+
     return html_content
+
+
+def safe_parse_value(value: Any) -> float:
+    """
+    DataFrame 값을 안전하게 숫자로 파싱하는 함수
+
+    Args:
+        value: 파싱할 값 (숫자, 문자열, 또는 기타 타입)
+
+    Returns:
+        float: 파싱된 숫자 값 (실패 시 0.0 반환)
+    """
+    try:
+        # None 체크
+        if value is None:
+            return 0.0
+
+        # 이미 숫자인 경우
+        if isinstance(value, (int, float)):
+            return float(value)
+
+        # 문자열인 경우
+        if isinstance(value, str):
+            # 특수 문자 제거 ($, %, 쉼표 등)
+            cleaned = value.strip().replace('$', '').replace('%', '').replace(',', '').replace('점', '')
+
+            # 빈 문자열 체크
+            if not cleaned:
+                return 0.0
+
+            # 숫자 변환
+            return float(cleaned)
+
+        # 기타 타입은 문자열로 변환 후 시도
+        return float(str(value))
+    except (ValueError, TypeError, AttributeError):
+        return 0.0
+
+
+def safe_get_product_label(product: Dict[str, Any]) -> str:
+    """
+    제품 데이터에서 안전하게 라벨 문자열을 생성하는 함수
+
+    Args:
+        product: 제품 데이터 딕셔너리
+
+    Returns:
+        str: "{브랜드} {제품명}" 형태의 라벨 (실패 시 "Unknown Product")
+    """
+    try:
+        if not product or not isinstance(product, dict):
+            return "Unknown Product"
+
+        brand = product.get('brand', '')
+        name = product.get('name', '')
+
+        # 둘 다 없으면 기본값
+        if not brand and not name:
+            return "Unknown Product"
+
+        # 브랜드만 있는 경우
+        if brand and not name:
+            return str(brand)
+
+        # 이름만 있는 경우
+        if not brand and name:
+            return str(name)
+
+        # 둘 다 있는 경우
+        return f"{brand} {name}"
+    except (KeyError, TypeError, AttributeError):
+        return "Unknown Product"
+
+
+def safe_find_item(items: list, key: str, value: Any) -> Optional[Dict[str, Any]]:
+    """
+    리스트에서 특정 키-값을 가진 아이템을 안전하게 찾는 함수
+
+    Args:
+        items: 검색할 딕셔너리 리스트
+        key: 검색할 키
+        value: 검색할 값
+
+    Returns:
+        Optional[Dict]: 찾은 아이템 (없으면 None)
+    """
+    try:
+        if not items or not isinstance(items, list):
+            return None
+
+        for item in items:
+            if isinstance(item, dict) and item.get(key) == value:
+                return item
+
+        return None
+    except (KeyError, TypeError, AttributeError):
+        return None
