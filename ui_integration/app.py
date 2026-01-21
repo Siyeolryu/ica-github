@@ -1451,54 +1451,50 @@ def main():
         }
         sort_column, ascending = sort_map.get(sort_by, ("신뢰도", False))
 
-        # 안전한 숫자 변환 및 정렬 (다중 레벨 보호)
+        # 안전한 정렬 적용 (단순화된 버전)
         try:
-            # 컬럼 존재 여부를 여러 방법으로 확인
-            columns_list = list(comparison_df.columns) if hasattr(comparison_df, 'columns') else []
-            
-            if not columns_list:
-                st.warning("비교표에 컬럼이 없습니다. 원본 순서로 표시합니다.")
-            elif sort_column not in columns_list:
-                # 컬럼이 없을 경우 경고 메시지 표시
-                available_columns = ", ".join(columns_list)
-                st.warning(f"정렬 컬럼 '{sort_column}'을 찾을 수 없습니다. 사용 가능한 컬럼: {available_columns}")
+            # 컬럼이 존재하는지 확인
+            if hasattr(comparison_df, 'columns') and sort_column in comparison_df.columns:
+                # DataFrame 복사하여 원본 보호
+                comparison_df = comparison_df.copy()
+                # 정렬 키 생성 및 정렬
+                comparison_df["_sort_key"] = comparison_df[sort_column].apply(safe_parse_value)
+                comparison_df = comparison_df.sort_values("_sort_key", ascending=ascending)
+                comparison_df = comparison_df.drop(columns=["_sort_key"])
+            elif not hasattr(comparison_df, 'columns'):
+                st.warning("비교표에 컬럼 정보가 없습니다. 원본 순서로 표시합니다.")
             else:
-                # 정렬 실행
-                try:
-                    # _sort_key 컬럼 생성 시도
-                    if sort_column in comparison_df.columns:
-                        comparison_df = comparison_df.copy()  # 원본 보호를 위한 복사
-                        comparison_df["_sort_key"] = comparison_df[sort_column].apply(safe_parse_value)
-                        comparison_df = comparison_df.sort_values("_sort_key", ascending=ascending)
-                        # _sort_key 컬럼이 존재하는지 확인 후 삭제
-                        if "_sort_key" in comparison_df.columns:
-                            comparison_df = comparison_df.drop(columns=["_sort_key"])
-                except KeyError as ke:
-                    st.warning(f"정렬 컬럼 접근 오류: {str(ke)}. 원본 순서로 표시합니다.")
-                except Exception as e:
-                    st.warning(f"정렬 중 오류가 발생했습니다: {str(e)}. 원본 순서로 표시합니다.")
+                # 컬럼이 없는 경우 경고만 표시하고 계속 진행
+                available_columns = ", ".join(list(comparison_df.columns))
+                st.info(f"정렬 컬럼 '{sort_column}'을 찾을 수 없습니다. 사용 가능한 컬럼: {available_columns}")
         except Exception as e:
-            st.warning(f"정렬 로직 실행 중 예상치 못한 오류가 발생했습니다: {str(e)}. 원본 순서로 표시합니다.")
-            import traceback
-            with st.expander("상세 오류 정보"):
-                st.code(traceback.format_exc())
+            # 모든 오류를 조용히 처리하고 원본 DataFrame 유지
+            st.warning(f"정렬 중 오류가 발생했습니다: {str(e)}. 원본 순서로 표시합니다.")
 
         # ========== Quick Win #3: 신뢰도별 행 배경색 ==========
         if not comparison_df.empty:
             def highlight_trust_row(row):
-                """신뢰도에 따른 행 하이라이트 (안전한 버전)"""
+                """신뢰도에 따른 행 하이라이트 (완전히 안전한 버전)"""
                 try:
-                    # row가 Series인 경우와 dict-like인 경우 모두 처리
+                    # Pandas Series에서 "신뢰도" 컬럼 값 안전하게 추출
                     if hasattr(row, 'get'):
+                        # dict-like 접근
                         trust_val = safe_parse_value(row.get("신뢰도", 0))
-                    elif "신뢰도" in row.index:
-                        trust_val = safe_parse_value(row["신뢰도"])
+                    elif hasattr(row, 'index') and "신뢰도" in row.index:
+                        # Series 접근
+                        trust_val = safe_parse_value(row.loc["신뢰도"])
                     else:
-                        trust_val = 0
-                except (KeyError, TypeError, AttributeError, IndexError):
-                    trust_val = 0
+                        trust_val = 0.0
+                except Exception:
+                    trust_val = 0.0
 
-                row_len = len(row) if hasattr(row, '__len__') else 10  # 기본값
+                # 행 길이 계산
+                try:
+                    row_len = len(row)
+                except Exception:
+                    row_len = 10
+
+                # 배경색 결정
                 if trust_val >= 70:
                     return ['background-color: #dcfce7'] * row_len
                 elif trust_val >= 50:
