@@ -331,14 +331,14 @@ class ChecklistVisualizer:
         """
         self.checklist_results = checklist_results
         self.items = {
-            "1_verified_purchase": "Verified Purchase",
-            "2_reorder_rate": "Repurchase Rate",
-            "3_long_term_use": "Long-term Use",
-            "4_rating_distribution": "Rating Distribution",
-            "5_review_length": "Review Length",
-            "6_time_distribution": "Time Distribution",
-            "7_ad_detection": "Ad Detection",
-            "8_reviewer_diversity": "Reviewer Diversity"
+            "1_verified_purchase": "인증 구매",
+            "2_reorder_rate": "재구매율",
+            "3_long_term_use": "장기 사용",
+            "4_rating_distribution": "평점 분포",
+            "5_review_length": "리뷰 길이",
+            "6_time_distribution": "시간 분포",
+            "7_ad_detection": "광고 탐지",
+            "8_reviewer_diversity": "리뷰어 다양성"
         }
         self.theme = ChartTheme()
     
