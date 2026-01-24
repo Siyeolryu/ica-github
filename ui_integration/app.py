@@ -44,9 +44,12 @@ def get_cached_categories():
     """카테고리 목록 캐싱"""
     return get_all_categories()
 
-@st.cache_data(ttl=300)
-def get_cached_statistics():
-    """통계 데이터 캐싱"""
+@st.cache_data(ttl=60, show_spinner=False)
+def get_cached_statistics(_cache_version="v2_fixed_price"):
+    """통계 데이터 캐싱 (평균가격 수정 버전 v2)
+    
+    _cache_version 파라미터로 캐시 키를 변경하여 기존 캐시 무효화
+    """
     return get_statistics_summary()
 
 @st.cache_data(ttl=300)
@@ -318,6 +321,16 @@ except ImportError as e:
     print(f"[ERROR] Visualizations import failed: {e}")
     print(traceback.format_exc())
     raise
+
+# 챗봇 검색 서비스 import
+import sys
+sys.path.append('../logic_designer')
+try:
+    from logic_designer.chatbot_search import ChatbotSearchService
+    CHATBOT_AVAILABLE = True
+except ImportError:
+    CHATBOT_AVAILABLE = False
+    print("[WARNING] Chatbot search service not available")
 
 # 커스텀 CSS - UI/UX 디자인 시스템 적용
 st.markdown("""
@@ -823,6 +836,120 @@ def main():
 
         st.markdown("---")
 
+        # ========== 챗봇 검색 기능 (RAG) ==========
+        st.markdown("### 💬 AI 제품 상담")
+
+        if CHATBOT_AVAILABLE:
+            # 챗봇 서비스 초기화 (세션 상태 사용)
+            if 'chatbot_service' not in st.session_state:
+                st.session_state.chatbot_service = ChatbotSearchService()
+
+            chatbot_service = st.session_state.chatbot_service
+
+            if chatbot_service.is_available():
+                # 챗 히스토리 초기화
+                if 'chat_history' not in st.session_state:
+                    st.session_state.chat_history = []
+
+                # 질문 입력창
+                user_query = st.text_input(
+                    "질문을 입력하세요",
+                    placeholder="예: 가장 신뢰도 높은 루테인 제품은?",
+                    key="chatbot_query",
+                    label_visibility="collapsed"
+                )
+
+                col_chat1, col_chat2 = st.columns([3, 1])
+                with col_chat1:
+                    search_clicked = st.button("🔍 검색", use_container_width=True, key="chatbot_search_btn")
+                with col_chat2:
+                    clear_clicked = st.button("🗑️", help="히스토리 삭제", use_container_width=True, key="chatbot_clear_btn")
+
+                if clear_clicked:
+                    st.session_state.chat_history = []
+                    st.rerun()
+
+                if search_clicked and user_query:
+                    with st.spinner("AI가 답변을 생성 중입니다..."):
+                        # 모든 제품과 리뷰 데이터 수집
+                        all_products_for_chat = get_cached_products() or []
+                        all_reviews_for_chat = []
+
+                        # 모든 제품의 리뷰 수집
+                        for p in all_products_for_chat:
+                            product_id = p.get('id')
+                            if product_id:
+                                from supabase_data import get_reviews_by_product
+                                reviews = get_reviews_by_product(product_id)
+                                all_reviews_for_chat.extend(reviews)
+
+                        # 챗봇 검색 실행
+                        result = chatbot_service.search(
+                            query=user_query,
+                            products=all_products_for_chat,
+                            reviews=all_reviews_for_chat,
+                            max_results=5
+                        )
+
+                        # 히스토리에 추가
+                        st.session_state.chat_history.append({
+                            "query": user_query,
+                            "result": result
+                        })
+
+                        st.rerun()
+
+                # 챗 히스토리 표시 (최근 3개)
+                if st.session_state.chat_history:
+                    st.markdown("#### 📝 최근 대화")
+
+                    for idx, chat in enumerate(reversed(st.session_state.chat_history[-3:])):
+                        with st.expander(f"Q: {chat['query'][:30]}...", expanded=(idx == 0)):
+                            result = chat['result']
+
+                            if result.get('success'):
+                                st.markdown("**🤖 AI 답변:**")
+                                st.info(result.get('answer', '답변 없음'))
+
+                                # 검색 통계 표시
+                                total_reviews_found = result.get('total_reviews_found', 0)
+                                if total_reviews_found > 0:
+                                    st.success(f"📊 총 {total_reviews_found}개의 관련 리뷰를 찾았습니다.")
+
+                                # 관련 제품 표시
+                                related_products = result.get('related_products', [])
+                                if related_products:
+                                    st.markdown("**📦 관련 제품:**")
+                                    for p in related_products[:3]:
+                                        st.caption(f"- {p.get('brand', '')} {p.get('name', '')[:30]}... (${p.get('price', 0):.2f})")
+
+                                # 관련 리뷰 표시 (2개 → 3개로 확대)
+                                related_reviews = result.get('related_reviews', [])
+                                if related_reviews:
+                                    st.markdown(f"**💬 관련 리뷰 ({len(related_reviews)}개):**")
+                                    for r in related_reviews[:3]:
+                                        # 리뷰 배지
+                                        badges = []
+                                        if r.get('verified', False):
+                                            badges.append("✓인증")
+                                        if r.get('reorder', False):
+                                            badges.append("🔄재구매")
+                                        if r.get('one_month_use', False):
+                                            badges.append("📅1개월+")
+
+                                        badge_str = " ".join(badges) if badges else ""
+                                        st.caption(f"- {r.get('text', '')[:60]}... (⭐{r.get('rating', 0)}/5) {badge_str}")
+                            else:
+                                st.error(result.get('error', '오류 발생'))
+            else:
+                st.warning("⚠️ Anthropic API 키가 설정되지 않았습니다.")
+                st.info("Settings > Secrets에서 ANTHROPIC_API_KEY를 설정하세요.")
+        else:
+            st.warning("⚠️ 챗봇 모듈을 불러올 수 없습니다.")
+            st.caption("logic_designer/chatbot_search.py 파일을 확인하세요.")
+
+        st.markdown("---")
+
         # ========== 제품 선택 (수직 배치) ==========
         # 1. 검색창 (최상단 배치)
         st.markdown("### 🔎 검색")
@@ -1015,9 +1142,14 @@ def main():
         # ========== 통계 & 인사이트 (수직 배치) ==========
         with st.expander("📊 실시간 통계", expanded=False):
             st.markdown("### 📊 실시간 통계")
+            
+            # 캐시 클리어 버튼 (디버깅용)
+            if st.button("🔄 통계 새로고침", help="캐시를 무효화하고 통계를 다시 계산합니다", key="refresh_stats"):
+                st.cache_data.clear()
+                st.rerun()
 
             try:
-                stats = get_cached_statistics()
+                stats = get_cached_statistics(_cache_version="v2_fixed_price")
 
                 # 전체 통계 (컴팩트)
                 col_s1, col_s2 = st.columns(2)

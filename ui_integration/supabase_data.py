@@ -203,9 +203,12 @@ def get_all_categories() -> List[str]:
 
 
 def get_statistics_summary() -> Dict:
-    """전체 통계 요약 반환"""
-    products = _fetch_from_supabase('products', 'select=*')
+    """전체 통계 요약 반환 (최근 30개 제품 기준)"""
+    products = _fetch_from_supabase('products', 'select=*&order=rating_count.desc')
     reviews = _fetch_from_supabase('reviews', 'select=*')
+    
+    # 최근 30개 제품만 사용 (rating_count 기준 상위 30개)
+    products = products[:30]
     
     total_products = len(products)
     total_reviews = len(reviews)
@@ -237,9 +240,28 @@ def get_statistics_summary() -> Dict:
         if rating and rating in rating_distribution:
             rating_distribution[rating] += 1
     
-    # 평균 가격
-    prices = [p.get('price', 0) for p in products if p.get('price')]
-    avg_price = sum(prices) / len(prices) if prices else 0
+    # 평균 가격 (가격 변환 및 검증 추가)
+    valid_prices = []
+    for p in products:
+        price = p.get('price')
+        if price is None:
+            continue
+        
+        # 가격 타입 변환
+        try:
+            price = float(price)
+        except (ValueError, TypeError):
+            continue
+        
+        # 가격 변환: 1000보다 크면 100으로 나누기 (KRW to USD 근사치)
+        if price > 1000:
+            price = price / 100
+        
+        # 가격 검증: 0보다 크고 1000 이하인 값만 사용 (USD 기준)
+        if 0 < price <= 1000:
+            valid_prices.append(price)
+    
+    avg_price = sum(valid_prices) / len(valid_prices) if valid_prices else 0
     
     return {
         'total_products': total_products,
